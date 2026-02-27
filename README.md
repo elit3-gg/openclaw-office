@@ -1,149 +1,193 @@
 # OpenClaw Office
 
-> 将 AI 智能体的协作逻辑具象化为实时的数字孪生办公室。
+> [中文文档](./README.zh.md)
 
-**OpenClaw Office** 是 [OpenClaw](https://github.com/openclaw/openclaw) Multi-Agent 系统的可视化监控前端。它通过 Isometric 风格的虚拟办公室场景，实时展示 Agent 的工作状态、协作链路、工具调用和资源消耗。
+> Visualize AI agent collaboration as a real-time digital twin office.
 
-**核心隐喻：** Agent = 数字员工 | 办公室 = Agent 运行时 | 工位 = Session | 会议室 = 协作上下文
+**OpenClaw Office** is the visual monitoring and management frontend for the [OpenClaw](https://github.com/openclaw/openclaw) Multi-Agent system. It renders Agent work status, collaboration links, tool calls, and resource consumption through an isometric-style virtual office scene, along with a full-featured console for system management.
 
----
-
-## 功能概览
-
-### 虚拟办公室
-
-- **固定工位 (Permanent Desks)：** 对应常驻 Agent（如 CEO-Agent、Dev-Agent），展示长期运行状态
-- **动态工位 (Hot Desks)：** 为 Sub-Agent（临时工）设计，任务触发时闪现，完成后消失
-- **会议中心 (Meeting Pods)：** 多 Agent 协作时自动聚集，展示联合任务流
-
-### 实时状态感知
-
-- **思维气泡 (Thinking Bubbles)：** 实时流式展示 Agent 正在生成的文本内容
-- **技能面板 (Skill Panels)：** Agent 调用工具时弹出对应的操作面板
-- **协作连线 (Collaboration Links)：** Agent 间消息传递的可视化连线
-
-### 监控与干预
-
-- **Token 仪表盘：** 实时展示全局 Token 消耗速率及各 Agent 贡献度
-- **Force Action：** 点击 Agent 可弹出指令面板，直接干预下一步决策
+**Core Metaphor:** Agent = Digital Employee | Office = Agent Runtime | Desk = Session | Meeting Pod = Collaboration Context
 
 ---
 
-## 技术栈
+## Features
 
-| 层 | 技术 |
-|-----|------|
-| 构建工具 | Vite 6 |
-| UI 框架 | React 19 |
-| 2D 渲染 | SVG + CSS Animations |
-| 2.5D/3D 渲染 | React Three Fiber (R3F) |
-| 状态管理 | Zustand 5 |
-| 样式 | Tailwind CSS 4 |
-| 图表 | Recharts |
-| 实时通信 | 原生 WebSocket（对接 OpenClaw Gateway） |
+### Virtual Office
+
+- **2D Floor Plan** — SVG-rendered isometric office with desk zones, hot desks, meeting areas, and rich furniture (desks, chairs, sofas, plants, coffee cups)
+- **3D Scene** — React Three Fiber 3D office with character models, skill holograms, spawn portal effects, and post-processing
+- **Agent Avatars** — Deterministically generated SVG avatars from agent IDs with real-time status animations (idle, working, speaking, tool calling, error)
+- **Collaboration Lines** — Visual connections showing inter-Agent message flow
+- **Speech Bubbles** — Live Markdown text streaming and tool call display
+- **Side Panels** — Agent details, Token line charts, cost pie charts, activity heatmaps, SubAgent relationship graphs, event timelines
+
+### Chat
+
+- Bottom-docked chat bar for real-time conversations with Agents
+- Agent selector, streaming message display, Markdown rendering
+- Chat history drawer with timeline view
+
+![office-2D](./assets/office-2d.png)
+
+![office-3D](./assets/office-3d.png)
+
+### Console
+
+Full system management interface with dedicated pages:
+
+| Page | Features |
+|------|----------|
+| **Dashboard** | Overview stats, alert banners, Channel/Skill overview, quick navigation |
+| **Agents** | Agent list/create/delete, detail tabs (Overview, Channels, Cron, Skills, Tools, Files) |
+| **Channels** | Channel cards, configuration dialogs, stats, WhatsApp QR binding |
+| **Skills** | Skill marketplace, install options, skill detail dialogs |
+| **Cron** | Scheduled task management and statistics |
+| **Settings** | Provider management (add/edit/model editor), appearance, Gateway, developer, advanced, about, update |
+
+![console-dashboard](./assets/console-dashboard.png)
+
+![console-agent](./assets/console-agent.png)
+
+![console-setting](./assets/console-setting.png)
+
+### Other
+
+- **i18n** — Full Chinese/English bilingual support with runtime language switching
+- **Mock Mode** — Develop without a live Gateway connection
+- **Responsive** — Mobile-optimized with automatic 2D fallback
 
 ---
 
-## 快速开始
+## Tech Stack
 
-### 环境要求
+| Layer | Technology |
+|-------|-----------|
+| Build Tool | Vite 6 |
+| UI Framework | React 19 |
+| 2D Rendering | SVG + CSS Animations |
+| 3D Rendering | React Three Fiber (R3F) + @react-three/drei |
+| State Management | Zustand 5 + Immer |
+| Styling | Tailwind CSS 4 |
+| Routing | React Router 7 |
+| Charts | Recharts |
+| i18n | i18next + react-i18next |
+| Real-time | Native WebSocket (connects to OpenClaw Gateway) |
 
-- Node.js 22+
-- pnpm
-- 运行中的 [OpenClaw Gateway](https://github.com/openclaw/openclaw)
+---
 
-### 安装与启动
+## Prerequisites
+
+- **Node.js 22+**
+- **pnpm** (package manager)
+- **[OpenClaw](https://github.com/openclaw/openclaw)** installed and configured
+
+OpenClaw Office is a companion frontend that connects to a running OpenClaw Gateway. It does **not** start or manage the Gateway itself.
+
+---
+
+## Quick Start
+
+### 1. Install Dependencies
 
 ```bash
-# 安装依赖
 pnpm install
-
-# 启动开发服务器
-pnpm dev
 ```
 
-### 配置
+### 2. Configure Gateway Connection
 
-#### 基础配置
-
-创建 `.env.local` 文件（已在 `.gitignore` 中，不会被提交），填入 Gateway 地址和认证 token：
+Create a `.env.local` file (gitignored) with your Gateway connection details:
 
 ```bash
 cat > .env.local << 'EOF'
 VITE_GATEWAY_URL=ws://localhost:18789
-VITE_GATEWAY_TOKEN=<你的 gateway token>
+VITE_GATEWAY_TOKEN=<your-gateway-token>
 EOF
 ```
 
-Gateway token 可通过以下命令获取：
+Get your Gateway token:
 
 ```bash
 openclaw config get gateway.auth.token
 ```
 
-#### Gateway 认证配置
+### 3. Enable Device Auth Bypass (Required)
 
-OpenClaw Office 是纯 Web 应用，连接 Gateway 时以 `openclaw-control-ui` 身份认证。Gateway 2026.2.15+ 要求签名的 device identity 来授予 operator scopes，而浏览器中无法提供 Ed25519 device identity。
-
-**要启用 Chat 等写操作功能，必须配置 Gateway 允许 bypass device auth：**
+OpenClaw Office is a pure web application and cannot provide Ed25519 device identity signatures that Gateway 2026.2.15+ requires for operator scopes. You must configure the Gateway to bypass this requirement:
 
 ```bash
 openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
 ```
 
-配置后需重启 Gateway。
+**Restart the Gateway** after this configuration change.
 
-> **注意：** 此配置仅建议在本地开发环境使用。生产环境应通过反向代理或其他安全机制处理认证。
+> **Security Note:** This bypass is intended for local development. In production, use a reverse proxy or other secure authentication mechanism.
 
-#### 环境变量说明
+### 4. Start the Gateway
 
-| 变量 | 必须 | 默认值 | 说明 |
-|------|------|--------|------|
-| `VITE_GATEWAY_URL` | 否 | `ws://localhost:18789` | Gateway WebSocket 地址 |
-| `VITE_GATEWAY_TOKEN` | 是（连接真实 Gateway 时） | 空 | Gateway 认证 token |
-| `VITE_MOCK` | 否 | `false` | 启用 Mock 模式（不连接 Gateway） |
+Ensure the OpenClaw Gateway is running on the configured address (default `localhost:18789`). You can start it via:
 
-#### Mock 模式
+- The OpenClaw macOS app
+- `openclaw gateway run` CLI command
+- Other deployment methods (see [OpenClaw documentation](https://github.com/openclaw/openclaw))
 
-如需在没有 Gateway 的情况下开发，启用 Mock 模式：
+### 5. Start the Dev Server
 
+```bash
+pnpm dev
 ```
-VITE_MOCK=true
+
+Open `http://localhost:5180` in your browser.
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_GATEWAY_URL` | No | `ws://localhost:18789` | Gateway WebSocket address |
+| `VITE_GATEWAY_TOKEN` | Yes (when connecting to real Gateway) | — | Gateway auth token |
+| `VITE_MOCK` | No | `false` | Enable mock mode (no Gateway needed) |
+
+### Mock Mode (No Gateway)
+
+To develop without a running Gateway, enable mock mode:
+
+```bash
+VITE_MOCK=true pnpm dev
 ```
+
+This uses simulated Agent data for UI development.
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 OpenClaw-Office/
 ├── src/
-│   ├── main.tsx                     # 入口
-│   ├── App.tsx                      # 根组件
-│   ├── gateway/                     # Gateway 通信层
-│   │   ├── ws-client.ts            # WebSocket 客户端 + 认证 + 重连
-│   │   ├── rpc-client.ts           # RPC 请求封装
-│   │   ├── event-parser.ts         # 事件解析 + 状态映射
-│   │   └── types.ts                # Gateway 协议类型
-│   ├── store/                       # Zustand 状态管理
-│   │   ├── office-store.ts         # 主 Store
-│   │   ├── agent-reducer.ts        # Agent CRUD + 状态转换
-│   │   └── metrics-reducer.ts      # 指标聚合
+│   ├── main.tsx / App.tsx           # Entry point and routing
+│   ├── i18n/                        # Internationalization (zh/en)
+│   ├── gateway/                     # Gateway communication layer
+│   │   ├── ws-client.ts             # WebSocket client + auth + reconnect
+│   │   ├── rpc-client.ts            # RPC request wrapper
+│   │   ├── event-parser.ts          # Event parsing + state mapping
+│   │   └── mock-adapter.ts          # Mock mode adapter
+│   ├── store/                       # Zustand state management
+│   │   ├── office-store.ts          # Main store (Agent state, connection, UI)
+│   │   └── console-stores/          # Per-page console stores
 │   ├── components/
-│   │   ├── layout/                 # 页面布局（AppShell、Sidebar、TopBar）
-│   │   ├── office-2d/              # Phase 1: 2D SVG 平面图
-│   │   ├── office-3d/              # Phase 2: R3F 3D 场景
-│   │   ├── overlays/               # HTML Overlay（气泡、状态、面板）
-│   │   ├── panels/                 # 侧边/弹窗面板
-│   │   └── shared/                 # 公共组件
-│   ├── hooks/                       # 自定义 Hooks
-│   ├── lib/                         # 工具库
-│   └── styles/                      # 全局样式
-├── public/
-│   ├── models/                      # GLTF/GLB 3D 模型（Phase 2+）
-│   └── icons/                       # 工具/Skill 图标
-├── tests/                           # 测试文件
-├── openspec/                        # 项目规格文档
+│   │   ├── layout/                  # AppShell, ConsoleLayout, Sidebar, TopBar
+│   │   ├── office-2d/               # 2D SVG floor plan + furniture
+│   │   ├── office-3d/               # 3D R3F scene
+│   │   ├── overlays/                # HTML overlays (speech bubbles)
+│   │   ├── panels/                  # Detail/metrics/chart panels
+│   │   ├── chat/                    # Chat dock bar
+│   │   ├── console/                 # Console feature components
+│   │   ├── pages/                   # Console route pages
+│   │   └── shared/                  # Shared components
+│   ├── hooks/                       # Custom React hooks
+│   ├── lib/                         # Utility library
+│   └── styles/                      # Global styles
+├── public/                          # Static assets
+├── tests/                           # Test files
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json
@@ -151,41 +195,47 @@ OpenClaw-Office/
 
 ---
 
-## 开发路线图
+## Development
 
-| 阶段 | 内容 | 目标 |
-|------|------|------|
-| Phase 1 (Week 1-2) | 基础框架 + 2D SVG 平面图 | 最小可用产品 |
-| Phase 2 (Week 3-4) | Isometric 2.5D 办公室 + Sub-Agent 可视化 | 核心体验 |
-| Phase 3 (Week 5-6) | 3D 增强 + Force Action + 监控面板 | 完整愿景 |
+### Commands
 
-详细规划见 `openspec/project.md`。
+```bash
+pnpm install              # Install dependencies
+pnpm dev                  # Start dev server (port 5180)
+pnpm build                # Production build
+pnpm test                 # Run tests
+pnpm test:watch           # Test watch mode
+pnpm typecheck            # TypeScript type check
+pnpm lint                 # Oxlint linting
+pnpm format               # Oxfmt formatting
+pnpm check                # lint + format check
+```
 
----
+### Architecture
 
-## 与 OpenClaw Gateway 的关系
+OpenClaw Office connects to the Gateway via WebSocket and follows this data flow:
 
-本项目通过 WebSocket 连接 OpenClaw Gateway，消费以下实时数据：
+```
+OpenClaw Gateway  ──WebSocket──>  ws-client.ts  ──>  event-parser.ts  ──>  Zustand Store  ──>  React Components
+     │                                                                          │
+     └── RPC (agents.list, chat.send, ...)  ──>  rpc-client.ts  ──────────────>─┘
+```
 
-- **Agent 生命周期事件** — `lifecycle` stream（start/end/error）
-- **工具调用事件** — `tool` stream（工具名、参数、结果）
-- **文本输出事件** — `assistant` stream（Markdown 文本流）
-- **Sub-Agent 事件** — 派生/结束生命周期
-- **RPC 数据** — `agents.list`、`usage.status`、`sessions.list` 等
-
----
-
-## 贡献
-
-欢迎任何关于 3D 模型优化、新的可视化效果或性能改进的贡献。
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/cool-effect`)
-3. 提交更改
-4. 开启 Pull Request
+The Gateway broadcasts real-time events (`agent`, `presence`, `health`, `heartbeat`) and responds to RPC requests. The frontend maps Agent lifecycle events to visual states (idle, working, speaking, tool_calling, error) and renders them in the office scene.
 
 ---
 
-## 许可证
+## Contributing
 
-MIT
+Contributions are welcome! Whether it's new visualization effects, 3D model improvements, console features, or performance optimizations.
+
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feature/cool-effect`)
+3. Commit your changes (use [Conventional Commits](https://www.conventionalcommits.org/))
+4. Open a Pull Request
+
+---
+
+## License
+
+[MIT](./LICENSE)
