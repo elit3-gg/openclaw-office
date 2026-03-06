@@ -33,12 +33,9 @@
 
 #### Demo Video
 
-[![Watch the OpenClaw Office demo on YouTube](./assets/office-3d.png)](https://youtu.be/ACXSFTSlVLY)
+<video src="https://raw.githubusercontent.com/WW-AI-Lab/openclaw-office/main/assets/iShot_2026-03-02_21.33.38.mp4" controls muted playsinline width="100%"></video>
 
-Watch the published demo on YouTube:
-https://youtu.be/ACXSFTSlVLY
-
-This short walkthrough shows the OpenClaw Office interface in context: the 2D/3D digital twin office, live Agent activity, collaboration links, and the management console experience.
+[Watch on YouTube](https://youtu.be/ACXSFTSlVLY)
 
 ### Console
 

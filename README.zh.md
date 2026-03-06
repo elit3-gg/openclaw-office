@@ -33,12 +33,9 @@
 
 #### 演示视频
 
-[![在 YouTube 观看 OpenClaw Office 演示](./assets/office-3d.png)](https://youtu.be/ACXSFTSlVLY)
+<video src="https://raw.githubusercontent.com/WW-AI-Lab/openclaw-office/main/assets/iShot_2026-03-02_21.33.38.mp4" controls muted playsinline width="100%"></video>
 
-已发布的演示视频：
-https://youtu.be/ACXSFTSlVLY
-
-这个短视频对应当前项目界面，展示了 OpenClaw Office 的 2D/3D 数字孪生办公室、Agent 实时状态与协作连线，以及控制台管理体验。
+[在 YouTube 观看](https://youtu.be/ACXSFTSlVLY)
 
 ### 控制台
 
