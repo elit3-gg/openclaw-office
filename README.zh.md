@@ -136,6 +136,15 @@ OPENCLAW_GATEWAY_TOKEN=<token> openclaw-office
 | `--host <host>`       | 绑定地址               | `0.0.0.0`              |
 | `-h, --help`          | 显示帮助               | —                      |
 
+生产服务端会对外暴露 Office，并通过同源路径 `/gateway-ws` 代理浏览器的 WebSocket 流量。其上游 Gateway 地址按以下优先级解析：
+
+1. `--gateway`
+2. `OPENCLAW_GATEWAY_URL`
+3. Office 持久化配置 `~/.openclaw/openclaw-office.json`
+4. 默认值 `ws://localhost:18789`
+
+当提供 `--gateway` 或 `OPENCLAW_GATEWAY_URL` 时，Office 会自动将该值持久化到 `~/.openclaw/openclaw-office.json`，供后续重启复用。
+
 > **说明：** 此方式运行的是预构建的生产版本。如需热重载开发，请参见下方 [开发](#开发) 部分。
 
 ---
@@ -150,11 +159,10 @@ pnpm install
 
 ### 2. 配置 Gateway 连接
 
-创建 `.env.local` 文件（已在 `.gitignore` 中，不会被提交），填入 Gateway 连接信息：
+创建 `.env.local` 文件（已在 `.gitignore` 中，不会被提交），填入 Gateway token。`VITE_GATEWAY_URL` 是可选项，仅在你希望 dev 模式代理到非默认 `ws://localhost:18789` 地址时才需要填写：
 
 ```bash
 cat > .env.local << 'EOF'
-VITE_GATEWAY_URL=ws://localhost:18789
 VITE_GATEWAY_TOKEN=<你的 gateway token>
 EOF
 ```
@@ -191,13 +199,13 @@ openclaw config set gateway.controlUi.dangerouslyDisableDeviceAuth true
 pnpm dev
 ```
 
-在浏览器中打开 `http://localhost:5180`。
+在浏览器中打开 `http://localhost:5180`。在 dev 模式下，前端会连接同源路径 `/gateway-ws`，再由 Vite 将该路径代理到配置的 Gateway 上游地址（默认 `ws://localhost:18789`）。
 
 ### 环境变量
 
 | 变量                 | 必须                      | 默认值                 | 说明                             |
 | -------------------- | ------------------------- | ---------------------- | -------------------------------- |
-| `VITE_GATEWAY_URL`   | 否                        | `ws://localhost:18789` | Gateway WebSocket 地址           |
+| `VITE_GATEWAY_URL`   | 否                        | `ws://localhost:18789` | 可选：覆盖 dev 代理的上游 Gateway 地址 |
 | `VITE_GATEWAY_TOKEN` | 是（连接真实 Gateway 时） | —                      | Gateway 认证 token               |
 | `VITE_MOCK`          | 否                        | `false`                | 启用 Mock 模式（不需要 Gateway） |
 

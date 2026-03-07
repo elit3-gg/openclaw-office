@@ -1,6 +1,7 @@
 import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { resolveGatewayWebSocketUrl } from "@/lib/gateway-url";
 import { REDACTED_SENTINEL } from "@/lib/provider-types";
 import { useConfigStore } from "@/store/console-stores/config-store";
 
@@ -19,7 +20,13 @@ export function DeveloperSection() {
     | Record<string, unknown>
     | undefined;
   const tokenConfigured = gatewayAuth?.token === REDACTED_SENTINEL;
-  const wsUrl = import.meta.env.VITE_GATEWAY_URL || "ws://localhost:18789";
+  const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
+    | { gatewayUrl?: string }
+    | undefined;
+  const wsUrl = resolveGatewayWebSocketUrl(
+    injected?.gatewayUrl || import.meta.env.VITE_GATEWAY_URL,
+    window.location,
+  );
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);

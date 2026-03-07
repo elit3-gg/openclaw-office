@@ -12,6 +12,7 @@ import { SettingsPage } from "@/components/pages/SettingsPage";
 import { SkillsPage } from "@/components/pages/SkillsPage";
 import type { PageId } from "@/gateway/types";
 import { useGatewayConnection } from "@/hooks/useGatewayConnection";
+import { resolveGatewayWebSocketUrl } from "@/lib/gateway-url";
 import { useResponsive } from "@/hooks/useResponsive";
 import { useOfficeStore } from "@/store/office-store";
 
@@ -102,8 +103,10 @@ export function App() {
   const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
     | { gatewayUrl?: string; gatewayToken?: string }
     | undefined;
-  const gatewayUrl =
-    injected?.gatewayUrl || import.meta.env.VITE_GATEWAY_URL || "ws://localhost:18789";
+  const gatewayUrl = resolveGatewayWebSocketUrl(
+    injected?.gatewayUrl || import.meta.env.VITE_GATEWAY_URL,
+    window.location,
+  );
   const gatewayToken = injected?.gatewayToken || import.meta.env.VITE_GATEWAY_TOKEN || "";
   const { isMobile } = useResponsive();
   const setViewMode = useOfficeStore((s) => s.setViewMode);

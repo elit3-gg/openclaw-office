@@ -136,6 +136,15 @@ OPENCLAW_GATEWAY_TOKEN=<token> openclaw-office
 | `--host <host>`       | Bind address          | `0.0.0.0`              |
 | `-h, --help`          | Show help             | —                      |
 
+The production server exposes Office publicly and proxies browser WebSocket traffic through the same origin path `/gateway-ws`. Its upstream Gateway address is resolved in this order:
+
+1. `--gateway`
+2. `OPENCLAW_GATEWAY_URL`
+3. persisted Office config at `~/.openclaw/openclaw-office.json`
+4. default `ws://localhost:18789`
+
+When `--gateway` or `OPENCLAW_GATEWAY_URL` is provided, Office automatically persists the value to `~/.openclaw/openclaw-office.json` for future restarts.
+
 > **Note:** This serves the pre-built production bundle. For development with hot reload, see [Development](#development) below.
 
 ---
@@ -150,11 +159,10 @@ pnpm install
 
 ### 2. Configure Gateway Connection
 
-Create a `.env.local` file (gitignored) with your Gateway connection details:
+Create a `.env.local` file (gitignored) with your Gateway token. `VITE_GATEWAY_URL` is optional and only needed if you want dev mode to proxy to a Gateway address other than the default `ws://localhost:18789`.
 
 ```bash
 cat > .env.local << 'EOF'
-VITE_GATEWAY_URL=ws://localhost:18789
 VITE_GATEWAY_TOKEN=<your-gateway-token>
 EOF
 ```
@@ -191,13 +199,13 @@ Ensure the OpenClaw Gateway is running on the configured address (default `local
 pnpm dev
 ```
 
-Open `http://localhost:5180` in your browser.
+Open `http://localhost:5180` in your browser. In dev mode, the frontend connects to the same-origin path `/gateway-ws`, and Vite proxies that path to the configured Gateway upstream (default `ws://localhost:18789`).
 
 ### Environment Variables
 
 | Variable             | Required                              | Default                | Description                          |
 | -------------------- | ------------------------------------- | ---------------------- | ------------------------------------ |
-| `VITE_GATEWAY_URL`   | No                                    | `ws://localhost:18789` | Gateway WebSocket address            |
+| `VITE_GATEWAY_URL`   | No                                    | `ws://localhost:18789` | Optional override for the dev proxy upstream Gateway address |
 | `VITE_GATEWAY_TOKEN` | Yes (when connecting to real Gateway) | —                      | Gateway auth token                   |
 | `VITE_MOCK`          | No                                    | `false`                | Enable mock mode (no Gateway needed) |
 
