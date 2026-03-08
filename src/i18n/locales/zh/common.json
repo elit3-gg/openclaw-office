@@ -79,5 +79,35 @@
     "errorPrefix": "错误: {{message}}",
     "unknownStream": "未知流: {{stream}}",
     "lifecycleUnknown": "生命周期: {{phase}}"
+  },
+  "connectionSetup": {
+    "eyebrow": "连接引导",
+    "title": "选择 OpenClaw 连接方式",
+    "description": "首次启动时请选择要通过本地 Node 代理连接的 Gateway 类型。后续浏览器仍统一连接 /gateway-ws，由本地代理转发到对应目标。",
+    "syncing": "正在应用连接配置并准备代理...",
+    "footer": "本地模式会回到当前 Office Server 的默认 Gateway。远程模式支持粘贴完整访问链接，并自动提取其中的 token。",
+    "actions": {
+      "continue": "继续连接",
+      "connecting": "应用中..."
+    },
+    "local": {
+      "title": "本地 Gateway",
+      "description": "使用当前 Office Server 默认的本地 Gateway 配置，保持原有启动模式。"
+    },
+    "remote": {
+      "title": "远程 Gateway",
+      "description": "通过本地 Node 代理转发到远程 Gateway，适用于阿里云或其他托管服务。",
+      "gatewayUrlLabel": "Gateway 访问地址",
+      "gatewayUrlHint": "可直接粘贴完整访问链接，例如 http(s)://host/path?token=...",
+      "gatewayUrlPlaceholder": "http://*.*.*.*/gateway?token=***",
+      "gatewayTokenLabel": "Gateway Token",
+      "gatewayTokenHint": "如果链接里没有 token，请在这里单独填写。",
+      "gatewayTokenExtracted": "已从访问链接中自动提取 token，你也可以手动覆盖。",
+      "gatewayTokenPlaceholder": "输入远程 Gateway token"
+    },
+    "validation": {
+      "gatewayUrlRequired": "请先填写远程 Gateway 访问地址。",
+      "gatewayTokenRequired": "请填写远程 Gateway token。"
+    }
   }
 }

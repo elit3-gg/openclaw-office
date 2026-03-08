@@ -6,6 +6,7 @@ export const DEFAULT_GATEWAY_URL = "ws://localhost:18789";
 export const DEFAULT_PORT = 5180;
 export const DEFAULT_HOST = "0.0.0.0";
 export const DEFAULT_PROXY_PATH = "/gateway-ws";
+const TOKEN_QUERY_PARAM = "token";
 
 export function getOfficeConfigPath(homeDir = homedir()) {
   return join(homeDir, ".openclaw", "openclaw-office.json");
@@ -64,8 +65,8 @@ export function printHelp() {
 
   \x1b[1mExamples:\x1b[0m
     openclaw-office
-    openclaw-office --token my-secret-token
-    openclaw-office --gateway ws://192.168.1.100:18789
+    openclaw-office --token <token>
+    openclaw-office --gateway ws://gateway.example.com:18789
     PORT=3000 openclaw-office
 `);
 }
@@ -118,6 +119,36 @@ export function writePersistedOfficeConfig(
   writeFileSync(configPath, `${JSON.stringify({ gatewayUrl }, null, 2)}\n`, "utf-8");
 }
 
+function formatParsedUrl(parsed, original) {
+  const serialized = parsed.toString();
+  if (/^[a-z]+:\/\/[^/?#]+(?:\?[^#]*)?(?:#.*)?$/i.test(original)) {
+    return serialized.replace(/\/$/, "");
+  }
+  return serialized;
+}
+
+export function normalizeGatewayAccessUrl(rawGatewayUrl) {
+  if (!rawGatewayUrl) {
+    return { gatewayUrl: rawGatewayUrl, token: "" };
+  }
+
+  try {
+    const parsed = new URL(rawGatewayUrl);
+    const token = parsed.searchParams.get(TOKEN_QUERY_PARAM) ?? "";
+    parsed.searchParams.delete(TOKEN_QUERY_PARAM);
+
+    if (parsed.protocol === "http:") {
+      parsed.protocol = "ws:";
+    } else if (parsed.protocol === "https:") {
+      parsed.protocol = "wss:";
+    }
+
+    return { gatewayUrl: formatParsedUrl(parsed, rawGatewayUrl), token };
+  } catch {
+    return { gatewayUrl: rawGatewayUrl, token: "" };
+  }
+}
+
 export function resolveConfig({
   argv = process.argv.slice(2),
   env = process.env,
@@ -157,6 +188,14 @@ export function resolveConfig({
   if (args.gatewayUrl) {
     gatewayUrl = args.gatewayUrl;
     gatewayUrlSource = "command line --gateway";
+  }
+
+  const normalizedGateway = normalizeGatewayAccessUrl(gatewayUrl);
+  gatewayUrl = normalizedGateway.gatewayUrl || gatewayUrl;
+
+  if (!token && normalizedGateway.token) {
+    token = normalizedGateway.token;
+    tokenSource = `${gatewayUrlSource} token query`;
   }
 
   const port = args.port || parseInt(env.PORT || `${DEFAULT_PORT}`, 10);

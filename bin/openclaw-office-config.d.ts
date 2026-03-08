@@ -33,6 +33,10 @@ export function readPersistedOfficeConfig(
   configPath?: string,
 ): { gatewayUrl: string } | null;
 export function writePersistedOfficeConfig(gatewayUrl: string, configPath?: string): void;
+export function normalizeGatewayAccessUrl(rawGatewayUrl: string): {
+  gatewayUrl: string;
+  token: string;
+};
 export function resolveConfig(options?: {
   argv?: string[];
   env?: NodeJS.ProcessEnv | Record<string, string>;

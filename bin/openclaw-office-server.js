@@ -5,6 +5,8 @@ import { request as httpsRequest } from "node:https";
 import { networkInterfaces } from "node:os";
 import { extname, join } from "node:path";
 
+const RUNTIME_CONNECTION_PATH = "/__openclaw/connection";
+
 export const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
@@ -94,6 +96,10 @@ function toUpstreamHttpUrl(gatewayUrl) {
   return upstreamUrl;
 }
 
+function toUpstreamOrigin(gatewayUrl) {
+  return toUpstreamHttpUrl(gatewayUrl).origin;
+}
+
 function serializeUpgradeResponse(statusCode, statusMessage, headers) {
   const lines = [`HTTP/1.1 ${statusCode} ${statusMessage}`];
   for (const [key, value] of Object.entries(headers)) {
@@ -159,6 +165,7 @@ export function proxyWebSocketUpgrade(req, downstreamSocket, downstreamHead, con
     headers: {
       ...req.headers,
       host: upstreamUrl.host,
+      origin: toUpstreamOrigin(config.gatewayUrl),
       connection: "Upgrade",
       upgrade: "websocket",
     },
@@ -218,12 +225,29 @@ async function tryReadFile(filePath) {
   }
 }
 
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+}
+
 export function createOfficeServer({
   config,
   distDir,
   createHttpServer = createServer,
 }) {
   const configScript = createRuntimeConfigScript(config);
+  const runtimeState = {
+    currentGatewayUrl: config.gatewayUrl,
+    defaultGatewayUrl: config.gatewayUrl,
+  };
   let indexHtmlCache = null;
 
   async function getIndexHtml() {
@@ -238,6 +262,48 @@ export function createOfficeServer({
   const server = createHttpServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     const pathname = decodeURIComponent(url.pathname);
+
+    if (pathname === RUNTIME_CONNECTION_PATH) {
+      if (req.method === "GET") {
+        const mode =
+          runtimeState.currentGatewayUrl === runtimeState.defaultGatewayUrl ? "local" : "remote";
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(
+          JSON.stringify({
+            mode,
+            gatewayUrl: runtimeState.currentGatewayUrl,
+          }),
+        );
+        return;
+      }
+
+      if (req.method === "POST") {
+        try {
+          const body = await readJsonBody(req);
+          if (body?.mode === "remote" && typeof body.gatewayUrl === "string" && body.gatewayUrl) {
+            runtimeState.currentGatewayUrl = body.gatewayUrl;
+          } else if (body?.mode === "local") {
+            runtimeState.currentGatewayUrl = runtimeState.defaultGatewayUrl;
+          } else {
+            res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+            res.end("Invalid connection config payload");
+            return;
+          }
+
+          res.writeHead(204);
+          res.end();
+          return;
+        } catch {
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Invalid JSON payload");
+          return;
+        }
+      }
+
+      res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Method Not Allowed");
+      return;
+    }
 
     if (pathname === "/" || pathname === "/index.html") {
       const html = await getIndexHtml();
@@ -263,7 +329,10 @@ export function createOfficeServer({
   });
 
   server.on("upgrade", (req, socket, head) => {
-    proxyWebSocketUpgrade(req, socket, head, config);
+    proxyWebSocketUpgrade(req, socket, head, {
+      ...config,
+      gatewayUrl: runtimeState.currentGatewayUrl,
+    });
   });
 
   return {

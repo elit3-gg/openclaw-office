@@ -1,7 +1,7 @@
 import { Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { resolveGatewayWebSocketUrl } from "@/lib/gateway-url";
+import { resolveGatewayConnectionConfig } from "@/lib/gateway-url";
 import { REDACTED_SENTINEL } from "@/lib/provider-types";
 import { useConfigStore } from "@/store/console-stores/config-store";
 
@@ -21,10 +21,11 @@ export function DeveloperSection() {
     | undefined;
   const tokenConfigured = gatewayAuth?.token === REDACTED_SENTINEL;
   const injected = (window as unknown as Record<string, unknown>).__OPENCLAW_CONFIG__ as
-    | { gatewayUrl?: string }
+    | { gatewayUrl?: string; gatewayToken?: string }
     | undefined;
-  const wsUrl = resolveGatewayWebSocketUrl(
+  const gatewayConnection = resolveGatewayConnectionConfig(
     injected?.gatewayUrl || import.meta.env.VITE_GATEWAY_URL,
+    injected?.gatewayToken || import.meta.env.VITE_GATEWAY_TOKEN,
     window.location,
     { preferSameOriginProxy: import.meta.env.DEV },
   );
@@ -59,9 +60,9 @@ export function DeveloperSection() {
 
         <DevRow
           label={t("settings.developer.wsUrl")}
-          value={wsUrl}
+          value={gatewayConnection.url}
           copyable
-          onCopy={() => copyToClipboard(wsUrl, "ws")}
+          onCopy={() => copyToClipboard(gatewayConnection.url, "ws")}
           copied={copied === "ws"}
           copiedLabel={t("settings.developer.copied")}
         />
