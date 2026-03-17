@@ -10,6 +10,7 @@ import type {
 } from "@/gateway/types";
 import { GatewayWsClient } from "@/gateway/ws-client";
 import { EventThrottle } from "@/lib/event-throttle";
+import { startRoaming, stopRoaming } from "@/lib/roaming-manager";
 import { useOfficeStore } from "@/store/office-store";
 import { useSubAgentPoller } from "./useSubAgentPoller";
 import { useUsagePoller } from "./useUsagePoller";
@@ -71,9 +72,21 @@ export function useGatewayConnection({ url, token }: UseGatewayConnectionOptions
         initAgents(agentList.agents);
         setOperatorScopes(["operator.admin"]);
         setConnectionStatus("connected");
+
+        // Start casual roaming for idle agents
+        startRoaming(
+          () => useOfficeStore.getState().agents,
+          (agentId, toZone, targetPos) => {
+            useOfficeStore.getState().startMovement(agentId, toZone as any, targetPos);
+          },
+          (agentId, toZone, targetPos) => {
+            useOfficeStore.getState().startMovement(agentId, toZone as any, targetPos);
+          },
+        );
       });
       return () => {
         unsubEvent?.();
+        stopRoaming();
       };
     }
 
@@ -106,6 +119,17 @@ export function useGatewayConnection({ url, token }: UseGatewayConnectionOptions
 
         void initAdapter("ws", { wsClient: ws, rpcClient: rpc });
         void fetchGatewayConfig(rpc, setMaxSubAgents, setAgentToAgentConfig);
+
+        // Start casual roaming for idle agents
+        startRoaming(
+          () => useOfficeStore.getState().agents,
+          (agentId, toZone, targetPos) => {
+            useOfficeStore.getState().startMovement(agentId, toZone as any, targetPos);
+          },
+          (agentId, toZone, targetPos) => {
+            useOfficeStore.getState().startMovement(agentId, toZone as any, targetPos);
+          },
+        );
       }
     });
 
@@ -124,6 +148,7 @@ export function useGatewayConnection({ url, token }: UseGatewayConnectionOptions
     ws.connect(url, token);
 
     return () => {
+      stopRoaming();
       throttle.destroy();
       ws.disconnect();
       wsRef.current = null;
