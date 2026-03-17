@@ -1,16 +1,16 @@
 import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
 import type { Group, Mesh } from "three";
 import type { VisualAgent } from "@/gateway/types";
-import { generateAvatar3dColor } from "@/lib/avatar-generator";
 import { position2dTo3d } from "@/lib/position-allocator";
 import { useOfficeStore } from "@/store/office-store";
 import { ErrorIndicator } from "./ErrorIndicator";
 import { SkillHologram } from "./SkillHologram";
+import { SpriteCharacter } from "./SpriteCharacter";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
 interface AgentCharacterProps {
@@ -181,12 +181,11 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
   const { t } = useTranslation("common");
   const groupRef = useRef<Group>(null);
   const bodyRef = useRef<Group>(null);
-  const leftHandRef = useRef<Mesh>(null);
-  const rightHandRef = useRef<Mesh>(null);
   const glowRef = useRef<Mesh>(null);
   const selectionRingRef = useRef<Mesh>(null);
   const spawnElapsed = useRef(0);
   const spawnDone = useRef(!agent.isSubAgent);
+  const moveDirRef = useRef<{ dx: number; dz: number } | null>(null);
   const selectAgent = useOfficeStore((s) => s.selectAgent);
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
   const [hovered, setHovered] = useState(false);
@@ -200,9 +199,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
   const isWalking = agent.movement !== null;
   const tickMovement = useOfficeStore((s) => s.tickMovement);
 
-  const baseColor = isSubAgent ? "#60a5fa" : generateAvatar3dColor(agent.id);
   const bodyOpacity = isPlaceholder ? 0.25 : isUnconfirmed ? 0.35 : isOffline ? 0.4 : isSubAgent ? 0.6 : 1;
-  const displayColor = isOffline || isPlaceholder || isUnconfirmed ? "#6b7280" : baseColor;
 
   const glowColor = statusGlowColor(agent.status);
   const glowIntensity = statusGlowIntensity(agent.status);
@@ -249,40 +246,40 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
         const [wx, , wz] = position2dTo3d(curAgent.position);
         const walkLerp = Math.min(2.5 * delta, 0.1);
         const pos = groupRef.current.position;
-        pos.x += (wx - pos.x) * walkLerp;
-        pos.z += (wz - pos.z) * walkLerp;
 
-        // Walk body sway +-0.08 rad at 8Hz
-        if (bodyRef.current) {
-          bodyRef.current.rotation.z = Math.sin(t * 8 * Math.PI * 2) * 0.08;
-          // Walk bounce
-          bodyRef.current.position.y = Math.abs(Math.sin(t * 8)) * 0.03;
+        // Track movement direction for sprite animation
+        const dx = wx - pos.x;
+        const dz = wz - pos.z;
+        if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+          moveDirRef.current = { dx, dz };
         }
 
-        // Arm swing while walking
-        if (leftHandRef.current && rightHandRef.current) {
-          const armSwing = Math.sin(t * 8 * Math.PI * 2) * 0.15;
-          leftHandRef.current.position.z = armSwing;
-          rightHandRef.current.position.z = -armSwing;
+        pos.x += dx * walkLerp;
+        pos.z += dz * walkLerp;
+
+        // Walk bounce on the body group
+        if (bodyRef.current) {
+          bodyRef.current.position.y = Math.abs(Math.sin(t * 8)) * 0.03;
         }
       }
     } else {
       // Normal smooth position lerp
       const lerpFactor = 1 - Math.pow(0.05, delta);
       const pos = groupRef.current.position;
-      pos.x += (targetX - pos.x) * lerpFactor;
-      pos.z += (targetZ - pos.z) * lerpFactor;
+      const dx = targetX - pos.x;
+      const dz = targetZ - pos.z;
+      if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+        moveDirRef.current = { dx, dz };
+      }
+      pos.x += dx * lerpFactor;
+      pos.z += dz * lerpFactor;
+
+      // Reset movement direction when idle
+      moveDirRef.current = null;
 
       // Idle breathing
       if (bodyRef.current) {
         bodyRef.current.position.y = Math.sin(t * 2) * 0.02;
-        bodyRef.current.rotation.z = 0;
-      }
-
-      // Reset hands to neutral position when idle
-      if (leftHandRef.current && rightHandRef.current) {
-        leftHandRef.current.position.z = THREE.MathUtils.lerp(leftHandRef.current.position.z, 0, 0.1);
-        rightHandRef.current.position.z = THREE.MathUtils.lerp(rightHandRef.current.position.z, 0, 0.1);
       }
     }
 
@@ -320,67 +317,37 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       {isSubAgent && <SpawnParticles active={spawnDone.current} />}
 
       <group ref={bodyRef}>
-        {/* Status emissive glow shell (slightly larger, transparent) */}
+        {/* Status emissive glow shell behind sprite */}
         {glowIntensity > 0 && (
-          <mesh ref={glowRef} position={[0, 0.35, 0]}>
-            <capsuleGeometry args={[0.18, 0.44, 8, 16]} />
+          <mesh ref={glowRef} position={[0, 0.3, -0.05]}>
+            <planeGeometry args={[0.7, 0.7]} />
             <meshStandardMaterial
               color={glowColor}
               emissive={glowColor}
               emissiveIntensity={glowIntensity}
               transparent
-              opacity={0.15}
+              opacity={0.2}
               depthWrite={false}
-              side={THREE.BackSide}
+              side={THREE.DoubleSide}
             />
           </mesh>
         )}
 
-        {/* Body capsule */}
-        <mesh position={[0, 0.35, 0]} castShadow>
-          <capsuleGeometry args={[0.15, 0.4, 8, 16]} />
-          <meshStandardMaterial
-            color={displayColor}
-            emissive={glowColor}
-            emissiveIntensity={glowIntensity * 0.3}
-            transparent={bodyOpacity < 1}
+        {/* Sprite character — billboarded pixel art from sprite sheet */}
+        <Suspense fallback={null}>
+          <SpriteCharacter
+            agentId={agent.id}
+            isWalking={isWalking}
+            moveDirection={moveDirRef.current}
+            scale={characterScale}
             opacity={bodyOpacity}
+            tint={isOffline || isPlaceholder || isUnconfirmed ? "#888888" : undefined}
           />
-        </mesh>
-
-        {/* Head sphere */}
-        <mesh position={[0, 0.7, 0]} castShadow>
-          <sphereGeometry args={[0.12, 16, 16]} />
-          <meshStandardMaterial
-            color={displayColor}
-            emissive={glowColor}
-            emissiveIntensity={glowIntensity * 0.2}
-            transparent={bodyOpacity < 1}
-            opacity={bodyOpacity}
-          />
-        </mesh>
-
-        {/* Arm / hand spheres for walking animation */}
-        <mesh ref={leftHandRef} position={[-0.2, 0.3, 0]} castShadow>
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshStandardMaterial
-            color={displayColor}
-            transparent={bodyOpacity < 1}
-            opacity={bodyOpacity}
-          />
-        </mesh>
-        <mesh ref={rightHandRef} position={[0.2, 0.3, 0]} castShadow>
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshStandardMaterial
-            color={displayColor}
-            transparent={bodyOpacity < 1}
-            opacity={bodyOpacity}
-          />
-        </mesh>
+        </Suspense>
 
         {/* Sub-agent "S" badge */}
         {isSubAgent && !isPlaceholder && (
-          <Html position={[0.15, 0.7, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
+          <Html position={[0.15, 0.55, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
             <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-400 text-[8px] font-bold text-white shadow">
               S
             </div>
