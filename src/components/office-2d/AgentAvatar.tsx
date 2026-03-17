@@ -201,14 +201,15 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
             title={agent.name}
             style={{
               fontSize: "11px",
-              fontWeight: 500,
-              color: isDark ? "#cbd5e1" : "#475569",
-              backgroundColor: isDark ? "rgba(30,41,59,0.7)" : "rgba(255,255,255,0.75)",
+              fontWeight: 600,
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              color: isDark ? "#e2e8f0" : "#475569",
+              backgroundColor: isDark ? "rgba(19,19,42,0.85)" : "rgba(255,255,255,0.75)",
               backdropFilter: "blur(6px)",
               borderRadius: "6px",
-              padding: "1px 8px",
+              padding: "2px 10px",
               whiteSpace: "nowrap",
-              border: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
+              border: `1px solid ${isDark ? "rgba(124,111,245,0.15)" : "rgba(0,0,0,0.06)"}`,
             }}
           >
             {displayName}
@@ -234,15 +235,16 @@ export const AgentAvatar = memo(function AgentAvatar({ agent }: AgentAvatarProps
             <span
               style={{
                 fontSize: "11px",
-                fontWeight: 500,
+                fontWeight: 600,
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 color: isDark ? "#e2e8f0" : "#374151",
-                backgroundColor: isDark ? "rgba(30,41,59,0.85)" : "rgba(255,255,255,0.9)",
+                backgroundColor: isDark ? "rgba(19,19,42,0.92)" : "rgba(255,255,255,0.9)",
                 backdropFilter: "blur(8px)",
                 borderRadius: "8px",
-                padding: "4px 10px",
+                padding: "5px 12px",
                 whiteSpace: "nowrap",
-                boxShadow: isDark ? "0 4px 8px rgba(0,0,0,0.3)" : "0 4px 8px rgba(0,0,0,0.1)",
-                border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}`,
+                boxShadow: isDark ? "0 4px 12px rgba(0,0,0,0.4)" : "0 4px 8px rgba(0,0,0,0.1)",
+                border: `1px solid ${isDark ? "rgba(124,111,245,0.2)" : "rgba(0,0,0,0.06)"}`,
               }}
             >
               {agent.name} · {t(`agent.statusLabels.${agent.status}`)}

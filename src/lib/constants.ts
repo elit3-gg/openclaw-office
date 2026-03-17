@@ -107,16 +107,16 @@ export const FURNITURE = {
 
 // Desk unit (Desk + Chair + AgentAvatar)
 export const DESK_UNIT = {
-  width: 140,
-  height: 110,
-  avatarRadius: 28,
+  width: 150,
+  height: 120,
+  avatarRadius: 36,
   avatarOffsetY: -8,
 } as const;
 
 // Agent avatar
 export const AVATAR = {
-  radius: 28,
-  selectedRadius: 32,
+  radius: 36,
+  selectedRadius: 40,
   strokeWidth: 3,
   nameLabelMaxChars: 12,
 } as const;

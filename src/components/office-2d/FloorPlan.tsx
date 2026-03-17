@@ -145,23 +145,23 @@ export function FloorPlan() {
             <feDropShadow dx="0" dy="3" stdDeviation="6" floodOpacity={isDark ? 0.5 : 0.12} />
           </filter>
           {/* Subtle grid pattern for corridor floor */}
-          <pattern id="corridor-tiles" width="28" height="28" patternUnits="userSpaceOnUse">
-            <rect width="28" height="28" fill={colors.corridor} />
+          <pattern id="corridor-tiles" width="16" height="16" patternUnits="userSpaceOnUse">
+            <rect width="16" height="16" fill={colors.corridor} />
             <rect
-              x="0.5"
-              y="0.5"
-              width="27"
-              height="27"
+              x="0.3"
+              y="0.3"
+              width="15.4"
+              height="15.4"
               fill="none"
-              stroke={isDark ? "#1f2937" : "#d5dbe3"}
+              stroke={isDark ? "#1f1f38" : "#d5dbe3"}
               strokeWidth="0.3"
-              rx="1"
+              rx="0.5"
             />
           </pattern>
           {/* Subtle carpet texture for lounge */}
-          <pattern id="lounge-carpet" width="6" height="6" patternUnits="userSpaceOnUse">
-            <rect width="6" height="6" fill={colors.lounge} />
-            <circle cx="3" cy="3" r="0.5" fill={isDark ? "#2d2540" : "#e5e0ed"} opacity="0.4" />
+          <pattern id="lounge-carpet" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill={colors.lounge} />
+            <circle cx="4" cy="4" r="0.6" fill={isDark ? "#3a2848" : "#e5e0ed"} opacity="0.3" />
           </pattern>
         </defs>
 
