@@ -1,6 +1,11 @@
 import { useFrame, useLoader } from "@react-three/fiber";
 import { useRef, useMemo, useEffect } from "react";
 import * as THREE from "three";
+import {
+  createIdleBehaviorState,
+  tickIdleBehavior,
+  getIdleFacingDirection,
+} from "@/lib/idle-behaviors";
 
 const SHEET_COLS = 4;
 const SHEET_ROWS = 4;
@@ -39,6 +44,8 @@ interface SpriteCharacterProps {
   opacity?: number;
   /** Tint color (hex string like "#ff0000") */
   tint?: string;
+  /** Whether agent is actively working (suppresses idle behaviors) */
+  isActive?: boolean;
 }
 
 /**
@@ -53,11 +60,13 @@ export function SpriteCharacter({
   scale = 1,
   opacity = 1,
   tint,
+  isActive = false,
 }: SpriteCharacterProps) {
   const spriteRef = useRef<THREE.Sprite>(null);
   const animFrame = useRef(0);
   const animTimer = useRef(0);
   const currentDir = useRef(DIR_DOWN);
+  const idleBehavior = useRef(createIdleBehaviorState());
 
   const skinIdx = useMemo(() => skinIndexFromId(agentId), [agentId]);
   const texturePath = useMemo(() => `/sprites/characters/Character_${padSkin(skinIdx)}.png`, [skinIdx]);
@@ -107,6 +116,9 @@ export function SpriteCharacter({
   useFrame((_, delta) => {
     if (!spriteTexture) return;
 
+    // Tick idle behavior system
+    tickIdleBehavior(idleBehavior.current, delta, isActive);
+
     // Determine direction from movement
     if (moveDirection && isWalking) {
       const { dx, dz } = moveDirection;
@@ -125,9 +137,30 @@ export function SpriteCharacter({
         animFrame.current = (animFrame.current + 1) % SHEET_COLS;
       }
     } else {
-      // Idle: use frame 0 (standing)
-      animFrame.current = 0;
-      animTimer.current = 0;
+      // Idle: use facing direction from idle behavior if available
+      const idleFacing = getIdleFacingDirection(idleBehavior.current);
+      if (idleFacing !== null) {
+        currentDir.current = idleFacing;
+      }
+
+      // Typing behavior: rapid frame cycling for "working" animation
+      if (idleBehavior.current.current === "typing") {
+        animTimer.current += delta * 4;
+        if (animTimer.current >= 1) {
+          animTimer.current = 0;
+          animFrame.current = animFrame.current === 0 ? 1 : 0;
+        }
+      } else {
+        animFrame.current = 0;
+        animTimer.current = 0;
+      }
+    }
+
+    // Apply idle micro-offsets to sprite position
+    if (!isWalking && spriteRef.current) {
+      const charHeight = 0.6 * scale;
+      spriteRef.current.position.y = charHeight / 2 + idleBehavior.current.offsetY * 0.01;
+      spriteRef.current.position.x = idleBehavior.current.offsetX * 0.005;
     }
 
     // Update UV offset for current frame

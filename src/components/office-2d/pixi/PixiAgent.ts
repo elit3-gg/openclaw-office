@@ -9,6 +9,12 @@ import {
 } from "pixi.js";
 import { STATUS_COLORS } from "@/lib/constants";
 import type { VisualAgent } from "@/gateway/types";
+import {
+  createIdleBehaviorState,
+  tickIdleBehavior,
+  getIdleFacingDirection,
+  type IdleBehaviorState,
+} from "@/lib/idle-behaviors";
 
 const FRAME_SIZE = 48;
 const SHEET_COLS = 4;
@@ -75,6 +81,10 @@ export class PixiAgent {
   private glowPhase: number = Math.random() * Math.PI * 2;
 
   private textureLoaded: boolean = false;
+
+  // Idle behavior system
+  private idleBehavior: IdleBehaviorState = createIdleBehaviorState();
+  private lastStatus: string = "idle";
 
   constructor(agent: VisualAgent) {
     this.id = agent.id;
@@ -206,6 +216,7 @@ export class PixiAgent {
     this.nameLabel.text = this.truncateName(agent.name);
 
     // Status
+    this.lastStatus = agent.status;
     this.updateStatusDot(agent.status);
 
     // Sub-agent badge
@@ -440,8 +451,17 @@ export class PixiAgent {
       }
     }
 
-    this.container.x = this.currentX;
-    this.container.y = this.currentY;
+    // Idle behavior micro-offsets (only when not walking)
+    const isActive = this.lastStatus === "thinking" || this.lastStatus === "speaking" || this.lastStatus === "tool_calling" || this.lastStatus === "spawning";
+    tickIdleBehavior(this.idleBehavior, dt * 0.016, isActive);
+
+    if (!this.isWalking || dist <= 1) {
+      this.container.x = this.currentX + this.idleBehavior.offsetX;
+      this.container.y = this.currentY + this.idleBehavior.offsetY;
+    } else {
+      this.container.x = this.currentX;
+      this.container.y = this.currentY;
+    }
 
     // Sprite animation
     if (this.textureLoaded && this.frames.length === 16) {
@@ -456,8 +476,11 @@ export class PixiAgent {
           this.sprite.texture = this.frames[frameIdx];
         }
       } else {
-        // Idle = frame 1
-        const frameIdx = this.currentDir * SHEET_COLS + 1;
+        // Idle: use facing direction from idle behavior if available
+        const idleFacing = getIdleFacingDirection(this.idleBehavior);
+        const idleDir = idleFacing !== null ? idleFacing : this.currentDir;
+        // Use frame 0 for idle (standing still)
+        const frameIdx = idleDir * SHEET_COLS + 1;
         if (this.frames[frameIdx]) {
           this.sprite.texture = this.frames[frameIdx];
         }

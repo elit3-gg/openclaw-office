@@ -342,6 +342,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
             scale={characterScale}
             opacity={bodyOpacity}
             tint={isOffline || isPlaceholder || isUnconfirmed ? "#888888" : undefined}
+            isActive={agent.status === "thinking" || agent.status === "speaking" || agent.status === "tool_calling" || agent.status === "spawning"}
           />
         </Suspense>
 
