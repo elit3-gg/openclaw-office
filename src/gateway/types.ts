@@ -103,6 +103,8 @@ export interface AgentEventPayload {
 
 // --- 可视化状态 ---
 
+export type CameraMode = "overview" | "follow" | "cinematic" | "firstPerson";
+
 export type AgentVisualStatus =
   | "idle"
   | "thinking"
@@ -250,6 +252,7 @@ export interface OfficeStore {
   lastSessionsSnapshot: SessionSnapshot | null;
   theme: ThemeMode;
   bloomEnabled: boolean;
+  cameraMode: CameraMode;
   operatorScopes: string[];
   tokenHistory: TokenSnapshot[];
   agentCosts: Record<string, number>;
@@ -304,6 +307,7 @@ export interface OfficeStore {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTheme: (theme: ThemeMode) => void;
   setBloomEnabled: (enabled: boolean) => void;
+  setCameraMode: (mode: CameraMode) => void;
 
   // 配置感知
   setMaxSubAgents: (n: number) => void;

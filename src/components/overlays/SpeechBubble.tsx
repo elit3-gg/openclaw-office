@@ -2,13 +2,20 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { useTranslation } from "react-i18next";
 import type { VisualAgent } from "@/gateway/types";
-import { SVG_HEIGHT, SVG_WIDTH } from "@/lib/constants";
+
+interface SvgOverlayBounds {
+  left: number;
+  top: number;
+  scaleX: number;
+  scaleY: number;
+}
 
 interface SpeechBubbleOverlayProps {
   agent: VisualAgent;
+  overlayBounds?: SvgOverlayBounds;
 }
 
-export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
+export function SpeechBubbleOverlay({ agent, overlayBounds }: SpeechBubbleOverlayProps) {
   const { t } = useTranslation("common");
   const [visible, setVisible] = useState(true);
   const [dismissed, setDismissed] = useState(false);
@@ -24,24 +31,24 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
       setVisible(false);
       return;
     }
-
-    if (agent.status !== "speaking") {
-      const readDelayMs = Math.min(30_000, Math.max(12_000, 9_000 + speechText.length * 30));
-      const timer = setTimeout(() => setVisible(false), readDelayMs);
-      return () => clearTimeout(timer);
-    }
-
     setVisible(true);
-  }, [agent.status, dismissed, speechText]);
+  }, [dismissed]);
 
   if (!agent.speechBubble || !visible || dismissed) {
     return null;
   }
 
-  const leftPct = (agent.position.x / SVG_WIDTH) * 100;
-  const topPct = (agent.position.y / SVG_HEIGHT) * 100;
-  const nearLeft = leftPct < 25;
-  const nearRight = leftPct > 75;
+  // Convert SVG coordinates to container pixel offsets
+  const pixelX = overlayBounds
+    ? overlayBounds.left + agent.position.x * overlayBounds.scaleX
+    : agent.position.x;
+  const pixelY = overlayBounds
+    ? overlayBounds.top + agent.position.y * overlayBounds.scaleY
+    : agent.position.y;
+
+  // Use percentage of container for positioning
+  const nearLeft = pixelX < (overlayBounds ? overlayBounds.left + (overlayBounds.scaleX * 300) : 300);
+  const nearRight = pixelX > (overlayBounds ? overlayBounds.left + overlayBounds.scaleX * 900 : 900);
 
   let translateX = "-50%";
   let arrowAlign: "center" | "left" | "right" = "center";
@@ -53,16 +60,18 @@ export function SpeechBubbleOverlay({ agent }: SpeechBubbleOverlayProps) {
     arrowAlign = "right";
   }
 
+  const avatarOffsetPx = overlayBounds ? 52 * overlayBounds.scaleY : 52;
+
   return (
     <div
       className="pointer-events-none absolute"
       data-testid="speech-bubble-anchor"
       style={{
-        left: `${leftPct}%`,
-        top: `${topPct}%`,
-        transform: `translate(${translateX}, -100%) translateY(-52px)`,
-        opacity: agent.status === "speaking" ? 1 : 0,
-        transition: "opacity 500ms ease",
+        left: `${pixelX}px`,
+        top: `${pixelY}px`,
+        transform: `translate(${translateX}, -100%) translateY(-${avatarOffsetPx}px)`,
+        opacity: 1,
+        transition: "opacity 300ms ease",
         zIndex: 21,
       }}
     >

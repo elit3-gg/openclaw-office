@@ -13,7 +13,7 @@ export function AgentSelector() {
   const targetAgentId = useChatDockStore((s) => s.targetAgentId);
   const setTargetAgent = useChatDockStore((s) => s.setTargetAgent);
 
-  const agentList = Array.from(agents.values());
+  const agentList = Array.from(agents.values()).filter((a) => !a.isPlaceholder && a.confirmed);
   const currentAgent = agentList.find((a) => a.id === targetAgentId) ?? agentList[0];
 
   useEffect(() => {
@@ -49,27 +49,44 @@ export function AgentSelector() {
 
       {open && (
         <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[160px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900">
-          {agentList.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              onClick={() => {
-                setTargetAgent(agent.id);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                agent.id === targetAgentId
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                  : "text-gray-700 dark:text-gray-300"
-              }`}
-            >
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: getAgentColor(agent.id) }}
-              />
-              <span className="truncate">{agent.name}</span>
-            </button>
-          ))}
+          {agentList.map((agent) => {
+            const parentAgent = agent.isSubAgent && agent.parentAgentId
+              ? agents.get(agent.parentAgentId)
+              : null;
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                onClick={() => {
+                  setTargetAgent(agent.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full flex-col px-3 py-1.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                  agent.id === targetAgentId
+                    ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                    : "text-gray-700 dark:text-gray-300"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getAgentColor(agent.id) }}
+                  />
+                  <span className="truncate">{agent.name}</span>
+                  {agent.isSubAgent && (
+                    <span className="ml-auto shrink-0 rounded bg-purple-100 px-1 py-0.5 text-[9px] text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
+                      sub
+                    </span>
+                  )}
+                </div>
+                {parentAgent && (
+                  <span className="ml-4 text-[10px] text-gray-400">
+                    ↳ {parentAgent.name}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

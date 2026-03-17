@@ -77,7 +77,7 @@ export function AppShell({ children, wsClient, isMobile = false }: AppShellProps
     const agent = agents.get(selectedAgentId);
     if (!agent) return;
 
-    const isEligibleTarget = agent.confirmed && !agent.isPlaceholder && !agent.isSubAgent;
+    const isEligibleTarget = agent.confirmed && !agent.isPlaceholder;
     if (!isEligibleTarget) return;
 
     const currentTarget = useChatDockStore.getState().targetAgentId;

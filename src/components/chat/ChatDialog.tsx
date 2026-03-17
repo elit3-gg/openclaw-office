@@ -3,6 +3,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import TextareaAutosize from "react-textarea-autosize";
 import { useChatDockStore, type ChatDockMessage } from "@/store/console-stores/chat-dock-store";
+import { useOfficeStore } from "@/store/office-store";
 import { AgentSelector } from "./AgentSelector";
 import { MarkdownContent } from "./MarkdownContent";
 import { MessageBubble } from "./MessageBubble";
@@ -43,6 +44,12 @@ function extractStreamingText(streamingMessage: Record<string, unknown> | null):
 export function ChatDialog() {
   const { t } = useTranslation("chat");
   const dockExpanded = useChatDockStore((s) => s.dockExpanded);
+  const targetAgentId = useChatDockStore((s) => s.targetAgentId);
+  const agents = useOfficeStore((s) => s.agents);
+  const targetAgent = targetAgentId ? agents.get(targetAgentId) : null;
+  const parentAgent = targetAgent?.isSubAgent && targetAgent.parentAgentId
+    ? agents.get(targetAgent.parentAgentId)
+    : null;
   const messages = useChatDockStore((s) => s.messages);
   const isStreaming = useChatDockStore((s) => s.isStreaming);
   const streamingMessage = useChatDockStore((s) => s.streamingMessage);
@@ -229,6 +236,21 @@ export function ChatDialog() {
           <Minimize2 className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Sub-agent context banner */}
+      {targetAgent?.isSubAgent && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-purple-100 bg-purple-50 px-3 py-1.5 text-xs dark:border-purple-900/30 dark:bg-purple-900/10">
+          <span className="rounded bg-purple-100 px-1 py-0.5 text-[9px] font-medium text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
+            sub-agent
+          </span>
+          <span className="font-medium text-purple-700 dark:text-purple-300">{targetAgent.name}</span>
+          {parentAgent && (
+            <span className="text-purple-500 dark:text-purple-400">
+              ↳ reporting to <span className="font-medium">{parentAgent.name}</span>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Loading state */}
       {isHistoryLoading && (

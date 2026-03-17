@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { ConsoleLayout } from "@/components/layout/ConsoleLayout";
 import { FloorPlan } from "@/components/office-2d/FloorPlan";
+import { PixiFloorPlan } from "@/components/office-2d/PixiFloorPlan";
 import { AgentsPage } from "@/components/pages/AgentsPage";
 import { ChannelsPage } from "@/components/pages/ChannelsPage";
 import { CronPage } from "@/components/pages/CronPage";
@@ -36,6 +37,7 @@ function Scene3DFallback() {
 
 function OfficeView() {
   const viewMode = useOfficeStore((s) => s.viewMode);
+  const { isMobile } = useResponsive();
   const [fading, setFading] = useState(false);
   const [displayMode, setDisplayMode] = useState(viewMode);
 
@@ -50,13 +52,18 @@ function OfficeView() {
     }
   }, [viewMode, displayMode]);
 
+  const render2D = () => {
+    // PixiJS for desktop (zoom, pan, minimap, particles), SVG fallback for mobile
+    return isMobile ? <FloorPlan /> : <PixiFloorPlan />;
+  };
+
   return (
     <div
       className="h-full w-full transition-opacity duration-300"
       style={{ opacity: fading ? 0 : 1 }}
     >
       {displayMode === "2d" ? (
-        <FloorPlan />
+        render2D()
       ) : (
         <Suspense fallback={<Scene3DFallback />}>
           <Scene3D />

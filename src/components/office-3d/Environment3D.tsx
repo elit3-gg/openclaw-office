@@ -2,6 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { ThemeMode } from "@/gateway/types";
+import { useOfficeStore } from "@/store/office-store";
 
 const WALL_HEIGHT = 2.8;
 const WALL_THICKNESS = 0.12;
@@ -270,10 +271,179 @@ function ThemeLighting({ theme }: { theme: ThemeMode }) {
   );
 }
 
+/** Floating ambient particles — dust motes in light mode, fireflies in dark */
+function AmbientParticles({ theme }: { theme: ThemeMode }) {
+  const pointsRef = useRef<THREE.Points>(null);
+  const count = 80;
+
+  const { positions, speeds } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const spd = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = Math.random() * 16;
+      pos[i * 3 + 1] = 0.5 + Math.random() * 2.5;
+      pos[i * 3 + 2] = Math.random() * 12;
+      spd[i] = 0.2 + Math.random() * 0.5;
+    }
+    return { positions: pos, speeds: spd };
+  }, []);
+
+  useFrame((state) => {
+    if (!pointsRef.current) return;
+    const t = state.clock.elapsedTime;
+    const posAttr = pointsRef.current.geometry.getAttribute("position");
+    for (let i = 0; i < count; i++) {
+      const baseY = 0.5 + ((i * 2.5) / count) * 2.5;
+      (posAttr.array as Float32Array)[i * 3 + 1] =
+        baseY + Math.sin(t * speeds[i] + i) * 0.3;
+      (posAttr.array as Float32Array)[i * 3] += Math.sin(t * 0.1 + i * 0.5) * 0.001;
+    }
+    posAttr.needsUpdate = true;
+
+    const mat = pointsRef.current.material as THREE.PointsMaterial;
+    mat.opacity = 0.3 + Math.sin(t * 0.5) * 0.1;
+  });
+
+  const particleColor = theme === "dark" ? "#ffd700" : "#c0c8d8";
+  const particleSize = theme === "dark" ? 0.04 : 0.025;
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions.slice(), 3]}
+          count={count}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        color={particleColor}
+        size={particleSize}
+        transparent
+        opacity={0.4}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+}
+
+/** Edge glow strips on zone dividers */
+function DividerEdgeGlow({
+  position,
+  length,
+  axis = "z",
+}: {
+  position: [number, number, number];
+  length: number;
+  axis?: "x" | "z";
+}) {
+  const ref = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (!ref.current) return;
+    const mat = ref.current.material as THREE.MeshStandardMaterial;
+    mat.emissiveIntensity = 0.4 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
+  });
+
+  const size: [number, number, number] =
+    axis === "z" ? [0.02, 0.06, length] : [length, 0.06, 0.02];
+
+  return (
+    <mesh ref={ref} position={position}>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        color="#5ba0e0"
+        emissive="#4090d0"
+        emissiveIntensity={0.4}
+        transparent
+        opacity={0.7}
+      />
+    </mesh>
+  );
+}
+
+/** LED strips along ceiling edges */
+function CeilingLEDStrips({ theme }: { theme: ThemeMode }) {
+  const refsBack = useRef<THREE.Mesh>(null);
+  const refsLeft = useRef<THREE.Mesh>(null);
+  const refsRight = useRef<THREE.Mesh>(null);
+
+  const ledColor = theme === "dark" ? "#4488ff" : "#88bbff";
+  const baseIntensity = theme === "dark" ? 0.8 : 0.3;
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    [refsBack, refsLeft, refsRight].forEach((ref, i) => {
+      if (!ref.current) return;
+      const mat = ref.current.material as THREE.MeshStandardMaterial;
+      mat.emissiveIntensity = baseIntensity + Math.sin(t * 1.5 + i * 1.2) * 0.15;
+    });
+  });
+
+  return (
+    <>
+      {/* Back wall ceiling edge */}
+      <mesh ref={refsBack} position={[8, WALL_HEIGHT - 0.05, 0.08]}>
+        <boxGeometry args={[16, 0.03, 0.03]} />
+        <meshStandardMaterial color={ledColor} emissive={ledColor} emissiveIntensity={baseIntensity} />
+      </mesh>
+      {/* Left wall ceiling edge */}
+      <mesh ref={refsLeft} position={[0.08, WALL_HEIGHT - 0.05, 6]}>
+        <boxGeometry args={[0.03, 0.03, 12]} />
+        <meshStandardMaterial color={ledColor} emissive={ledColor} emissiveIntensity={baseIntensity} />
+      </mesh>
+      {/* Right wall ceiling edge (partial) */}
+      <mesh ref={refsRight} position={[15.92, WALL_HEIGHT - 0.05, 5]}>
+        <boxGeometry args={[0.03, 0.03, 10]} />
+        <meshStandardMaterial color={ledColor} emissive={ledColor} emissiveIntensity={baseIntensity} />
+      </mesh>
+    </>
+  );
+}
+
+/** Pulsing ambient light that responds to agent activity */
+function ActivityAmbientLight() {
+  const lightRef = useRef<THREE.PointLight>(null);
+
+  useFrame(() => {
+    if (!lightRef.current) return;
+    const agents = useOfficeStore.getState().agents;
+    let activeCount = 0;
+    agents.forEach((a) => {
+      if (a.status === "thinking" || a.status === "tool_calling" || a.status === "speaking") {
+        activeCount++;
+      }
+    });
+    // More active agents = warmer, brighter
+    const targetIntensity = 0.1 + Math.min(activeCount * 0.08, 0.5);
+    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, targetIntensity, 0.05);
+    // Shift color from cool to warm as activity increases
+    const warmth = Math.min(activeCount / 8, 1);
+    lightRef.current.color.setRGB(
+      0.9 + warmth * 0.1,
+      0.85 - warmth * 0.1,
+      0.75 - warmth * 0.2,
+    );
+  });
+
+  return <pointLight ref={lightRef} position={[8, 3, 6]} intensity={0.1} distance={20} decay={1} />;
+}
+
 export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMode }) {
   return (
     <group>
       <ThemeLighting theme={theme} />
+      <ActivityAmbientLight />
+
+      {/* Subtle fog */}
+      <fog attach="fog" args={[theme === "dark" ? "#0f1729" : "#e8ecf2", 15, 50]} />
+
+      {/* === Ambient Particles === */}
+      <AmbientParticles theme={theme} />
+
+      {/* === Ceiling LED strips === */}
+      <CeilingLEDStrips theme={theme} />
 
       {/* === Ground / Base Platform === */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[8, -0.08, 6]} receiveShadow>
@@ -287,10 +457,15 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
         <meshStandardMaterial color="#a8b2c0" roughness={0.8} />
       </mesh>
 
-      {/* Main floor */}
+      {/* Main floor — improved glossiness */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[8, 0.01, 6]} receiveShadow>
         <planeGeometry args={[16, 12]} />
-        <meshStandardMaterial color={FLOOR_COLOR} roughness={0.7} metalness={0.02} />
+        <meshStandardMaterial
+          color={FLOOR_COLOR}
+          roughness={0.3}
+          metalness={0.05}
+          envMapIntensity={0.4}
+        />
       </mesh>
 
       {/* Floor grid lines (very subtle) */}
@@ -303,7 +478,7 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
       <WallWithWindows start={[0, 0, 0]} end={[0, 0, 12]} windowCount={3} side="left" />
       {/* Right wall (east) — with entrance opening in lounge zone */}
       <Wall position={[16, WALL_HEIGHT / 2, 2]} size={[WALL_THICKNESS, WALL_HEIGHT, 4]} />
-      {/* Right wall lower section, split for entrance door at z≈11 */}
+      {/* Right wall lower section, split for entrance door at z~11 */}
       <Wall position={[16, WALL_HEIGHT / 2, 8.2]} size={[WALL_THICKNESS, WALL_HEIGHT, 2.4]} />
       <Wall position={[16, WALL_HEIGHT / 2, 11.7]} size={[WALL_THICKNESS, WALL_HEIGHT, 0.6]} />
       {/* Door frame — entrance opening z=9.4 to z=11.4 */}
@@ -311,15 +486,17 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
         <boxGeometry args={[WALL_THICKNESS + 0.04, 0.1, 2.1]} />
         <meshStandardMaterial color={WALL_EDGE_COLOR} roughness={0.4} metalness={0.3} />
       </mesh>
-      {/* Right wall windows */}
+      {/* Right wall windows — improved glass material */}
       <mesh position={[16.07, 1.3, 2]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[1.2, 1.3]} />
         <meshStandardMaterial
           color={WINDOW_COLOR}
           emissive={WINDOW_EMISSIVE}
-          emissiveIntensity={0.15}
+          emissiveIntensity={0.25}
           transparent
-          opacity={0.5}
+          opacity={0.4}
+          roughness={0.05}
+          metalness={0.9}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -337,15 +514,21 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
         <boxGeometry args={[0.04, 0.03, 5.5]} />
         <meshStandardMaterial color="#5b9bd5" emissive="#4a8ac4" emissiveIntensity={0.2} />
       </mesh>
+      {/* Edge glow on desk/meeting divider */}
+      <DividerEdgeGlow position={[8, WALL_HEIGHT * 0.7 + 0.04, 3]} length={5.5} axis="z" />
 
       {/* Divider between work area and lounge */}
       <Wall
         position={[8, WALL_HEIGHT * 0.28, 9]}
         size={[WALL_THICKNESS, WALL_HEIGHT * 0.56, 5.5]}
       />
+      {/* Edge glow on work/lounge divider */}
+      <DividerEdgeGlow position={[8, WALL_HEIGHT * 0.56 + 0.04, 9]} length={5.5} axis="z" />
 
       {/* Horizontal divider separating top/bottom zones */}
       <Wall position={[4, WALL_HEIGHT * 0.3, 6]} size={[7.5, WALL_HEIGHT * 0.6, WALL_THICKNESS]} />
+      {/* Edge glow on horizontal divider */}
+      <DividerEdgeGlow position={[4, WALL_HEIGHT * 0.6 + 0.04, 6]} length={7.5} axis="x" />
 
       {/* === Stairs === */}
       <Stairs position={[15, 0, 5.5]} rotation={Math.PI} steps={5} />

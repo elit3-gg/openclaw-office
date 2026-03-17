@@ -97,7 +97,11 @@ function toUpstreamHttpUrl(gatewayUrl) {
 }
 
 function toUpstreamOrigin(gatewayUrl) {
-  return toUpstreamHttpUrl(gatewayUrl).origin;
+  const url = toUpstreamHttpUrl(gatewayUrl);
+  if (url.hostname === "127.0.0.1") {
+    url.hostname = "localhost";
+  }
+  return url.origin;
 }
 
 function serializeUpgradeResponse(statusCode, statusMessage, headers) {

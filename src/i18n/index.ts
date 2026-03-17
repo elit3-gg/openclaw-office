@@ -42,7 +42,7 @@ i18n
       },
     },
     supportedLngs: [...supportedLngs],
-    fallbackLng: "zh",
+    fallbackLng: "en",
     defaultNS: "common",
     ns: [...namespaces],
     interpolation: {

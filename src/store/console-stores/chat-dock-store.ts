@@ -54,9 +54,9 @@ function buildSessionKey(agentId: string): string {
   return `agent:${agentId}:main`;
 }
 
-function isStableMainAgent(agentId: string): boolean {
+function isValidChatTarget(agentId: string): boolean {
   const agent = useOfficeStore.getState().agents.get(agentId);
-  return Boolean(agent && agent.confirmed && !agent.isPlaceholder && !agent.isSubAgent);
+  return Boolean(agent && agent.confirmed && !agent.isPlaceholder);
 }
 
 function getFallbackTargetAgentId(): string | null {
@@ -72,10 +72,19 @@ function getFallbackTargetAgentId(): string | null {
 }
 
 function resolveTargetAgentId(agentId: string): string | null {
-  if (isStableMainAgent(agentId)) {
+  if (isValidChatTarget(agentId)) {
     return agentId;
   }
   return getFallbackTargetAgentId();
+}
+
+function getAgentSessionKey(agentId: string, sessions: SessionInfo[]): string {
+  const agent = useOfficeStore.getState().agents.get(agentId);
+  if (agent?.isSubAgent && agent.runId) {
+    // Sub-agents store their sessionKey in runId
+    return agent.runId;
+  }
+  return pickLatestAgentSessionKey(agentId, sessions);
 }
 
 function pickLatestAgentSessionKey(agentId: string, sessions: SessionInfo[]): string {
@@ -218,7 +227,8 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
       set({ sessions });
 
       const { targetAgentId, currentSessionKey } = get();
-      if (targetAgentId && isStableMainAgent(targetAgentId)) {
+      const targetAgent = targetAgentId ? useOfficeStore.getState().agents.get(targetAgentId) : null;
+      if (targetAgentId && isValidChatTarget(targetAgentId) && !targetAgent?.isSubAgent) {
         const preferredSessionKey = pickLatestAgentSessionKey(targetAgentId, sessions);
         if (preferredSessionKey !== currentSessionKey) {
           set({
@@ -287,7 +297,7 @@ export const useChatDockStore = create<ChatDockState>((set, get) => ({
       return;
     }
 
-    const sessionKey = pickLatestAgentSessionKey(resolvedAgentId, get().sessions);
+    const sessionKey = getAgentSessionKey(resolvedAgentId, get().sessions);
     set({
       targetAgentId: resolvedAgentId,
       currentSessionKey: sessionKey,

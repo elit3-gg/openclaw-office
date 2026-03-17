@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { SpeechBubbleOverlay } from "@/components/overlays/SpeechBubble";
 import type { VisualAgent } from "@/gateway/types";
 import {
@@ -17,10 +17,60 @@ import { DeskUnit } from "./DeskUnit";
 import { MeetingTable, Sofa, Plant, CoffeeCup, Chair } from "./furniture";
 import { ZoneLabel } from "./ZoneLabel";
 
+interface SvgOverlayBounds {
+  left: number;
+  top: number;
+  scaleX: number;
+  scaleY: number;
+}
+
 export function FloorPlan() {
   const agents = useOfficeStore((s) => s.agents);
   const links = useOfficeStore((s) => s.links);
   const theme = useOfficeStore((s) => s.theme);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [overlayBounds, setOverlayBounds] = useState<SvgOverlayBounds>({
+    left: 0,
+    top: 0,
+    scaleX: 1,
+    scaleY: 1,
+  });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const compute = () => {
+      const { width: cw, height: ch } = container.getBoundingClientRect();
+      if (!cw || !ch) return;
+      const svgAspect = SVG_WIDTH / SVG_HEIGHT;
+      const containerAspect = cw / ch;
+      let renderedW: number, renderedH: number, left: number, top: number;
+      if (containerAspect > svgAspect) {
+        renderedH = ch;
+        renderedW = ch * svgAspect;
+        left = (cw - renderedW) / 2;
+        top = 0;
+      } else {
+        renderedW = cw;
+        renderedH = cw / svgAspect;
+        left = 0;
+        top = (ch - renderedH) / 2;
+      }
+      setOverlayBounds({
+        left,
+        top,
+        scaleX: renderedW / SVG_WIDTH,
+        scaleY: renderedH / SVG_HEIGHT,
+      });
+    };
+
+    const ro = new ResizeObserver(compute);
+    ro.observe(container);
+    compute();
+    return () => ro.disconnect();
+  }, []);
 
   const agentList = Array.from(agents.values());
   const isDark = theme === "dark";
@@ -84,7 +134,7 @@ export function FloorPlan() {
   );
 
   return (
-    <div className="relative h-full w-full bg-gray-100 dark:bg-gray-950">
+    <div ref={containerRef} className="relative h-full w-full bg-gray-100 dark:bg-gray-950">
       <svg
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         className="h-full w-full"
@@ -222,9 +272,13 @@ export function FloorPlan() {
       </svg>
 
       {agentList
-        .filter((agent) => agent.speechBubble)
+        .filter((agent) => agent.speechBubble && agent.status === "speaking")
         .map((agent) => (
-          <SpeechBubbleOverlay key={`bubble-${agent.id}`} agent={agent} />
+          <SpeechBubbleOverlay
+            key={`bubble-${agent.id}`}
+            agent={agent}
+            overlayBounds={overlayBounds}
+          />
         ))}
     </div>
   );

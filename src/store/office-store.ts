@@ -46,7 +46,7 @@ const zoneMigrationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const confirmationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const removedAgentIds = new Set<string>();
 const REMOVED_IDS_TTL_MS = 30_000;
-const UNCONFIRMED_TIMEOUT_MS = 5_000;
+const UNCONFIRMED_TIMEOUT_MS = 15_000;
 let meetingGatheringTimer: ReturnType<typeof setTimeout> | null = null;
 let lastMeetingGroupsHash = "";
 const MEETING_GATHERING_THROTTLE_MS = 500;
@@ -287,6 +287,7 @@ export const useOfficeStore = create<OfficeStore>()(
     lastSessionsSnapshot: null,
     theme: getInitialTheme(),
     bloomEnabled: getInitialBloom(),
+    cameraMode: "overview" as const,
     operatorScopes: [] as string[],
     tokenHistory: [] as TokenSnapshot[],
     agentCosts: {} as Record<string, number>,
@@ -413,10 +414,18 @@ export const useOfficeStore = create<OfficeStore>()(
 
         state.globalMetrics = computeMetrics(state.agents, state.globalMetrics);
       });
-      // Post-set: trigger walk animation to hotDesk (from lounge, corridor, or misclassified desk)
+      // Post-set: trigger walk animation toward parent agent's zone, fallback to hotDesk
       const agent = useOfficeStore.getState().agents.get(info.agentId);
-      if (agent && agent.zone !== "hotDesk" && agent.zone !== "meeting") {
-        useOfficeStore.getState().startMovement(info.agentId, "hotDesk");
+      if (agent && agent.zone !== "meeting") {
+        const parent = useOfficeStore.getState().agents.get(parentId);
+        const parentZone = parent?.zone;
+        if (parentZone && parentZone !== "corridor" && parentZone !== "lounge" && parentZone !== "hotDesk") {
+          // Walk to near the parent agent's position in their zone
+          const offset = { x: parent!.position.x + 18, y: parent!.position.y + 18 };
+          useOfficeStore.getState().startMovement(info.agentId, parentZone, offset);
+        } else if (agent.zone !== "hotDesk") {
+          useOfficeStore.getState().startMovement(info.agentId, "hotDesk");
+        }
       }
     },
 
@@ -469,7 +478,7 @@ export const useOfficeStore = create<OfficeStore>()(
           const phId = `placeholder-${phIdx}`;
           const ph: VisualAgent = {
             id: phId,
-            name: `待命-${phIdx}`,
+            name: `Standby-${phIdx}`,
             status: "idle",
             position: freeLounge,
             currentTool: null,
@@ -586,7 +595,7 @@ export const useOfficeStore = create<OfficeStore>()(
           if (state.agents.has(phId)) continue;
           const ph: VisualAgent = {
             id: phId,
-            name: `待命-${i}`,
+            name: `Standby-${i}`,
             status: "idle",
             position: { ...loungePositions[i] },
             currentTool: null,
@@ -971,6 +980,12 @@ export const useOfficeStore = create<OfficeStore>()(
     setBloomEnabled: (enabled: boolean) => {
       set((state) => {
         state.bloomEnabled = enabled;
+      });
+    },
+
+    setCameraMode: (mode) => {
+      set((state) => {
+        state.cameraMode = mode;
       });
     },
 
