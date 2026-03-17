@@ -18,6 +18,12 @@ Thumbs.db
 
 # Test
 coverage/
+
+# Claude/Antigravity tooling
+.claude/
+.claude-flow/
+.mcp.json
+.gather-clone/
 src/**/__tests__/
 *.test.ts
 *.test.tsx

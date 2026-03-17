@@ -59,7 +59,7 @@ export function Sidebar() {
 
   if (collapsed) {
     return (
-      <aside className="flex w-12 flex-col items-center border-l border-gray-200 bg-white py-3 dark:border-gray-700 dark:bg-gray-900">
+      <aside className="flex w-12 flex-col items-center border-l border-gray-200 bg-white py-3 dark:border-[#1a1a2e] dark:bg-[#13132a]">
         <button
           onClick={() => setSidebarCollapsed(false)}
           className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -78,7 +78,7 @@ export function Sidebar() {
   const timelineSection = getSection("timeline");
 
   return (
-    <aside className="flex w-80 flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+    <aside className="flex w-80 flex-col border-l border-gray-200 bg-white dark:border-[#1a1a2e] dark:bg-[#13132a]">
       {/* Sidebar header */}
       <div className="flex h-8 shrink-0 items-center justify-between border-b border-gray-200 px-3 dark:border-gray-700">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">

@@ -49,12 +49,12 @@ export const ZONE_COLORS = {
 } as const;
 
 export const ZONE_COLORS_DARK = {
-  desk: "#1e293b",
-  meeting: "#1a2744",
-  hotDesk: "#1e2433",
-  lounge: "#231e33",
-  corridor: "#0f172a",
-  wall: "#475569",
+  desk: "#2a2a42",
+  meeting: "#2e2844",
+  hotDesk: "#2a2d40",
+  lounge: "#332844",
+  corridor: "#252540",
+  wall: "#4a4a6a",
 } as const;
 
 export const STATUS_COLORS: Record<AgentVisualStatus, string> = {

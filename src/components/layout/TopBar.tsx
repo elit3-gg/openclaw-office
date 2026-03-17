@@ -41,7 +41,7 @@ export function TopBar({ isMobile = false }: TopBarProps) {
   const isOfficePage = currentPage === "office";
 
   return (
-    <header className="flex h-12 shrink-0 items-center border-b border-gray-200 bg-white px-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+    <header className="flex h-12 shrink-0 items-center border-b border-gray-200 bg-white px-4 shadow-sm dark:border-[#1a1a2e] dark:bg-[#13132a]">
       {isOfficePage ? (
         <OfficeTopBarContent
           viewMode={viewMode}
