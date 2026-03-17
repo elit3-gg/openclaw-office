@@ -1,4 +1,5 @@
 import {
+  Assets,
   Container,
   Sprite,
   Texture,
@@ -156,9 +157,10 @@ export class PixiAgent {
     const path = `/sprites/characters/Character_${padSkin(skinIdx)}.png`;
 
     try {
-      const baseTexture = await Texture.from(path).source;
-      // baseTexture is a TextureSource. We need to extract frames from it.
-      // In Pixi v8, we create textures with frame rectangles
+      // PixiJS v8: use Assets.load() to properly load and cache textures
+      const loadedTexture = await Assets.load<Texture>(path);
+      const baseTexture = loadedTexture.source;
+      // Extract individual frames from the sprite sheet
       this.frames = [];
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < SHEET_COLS; col++) {
@@ -174,6 +176,9 @@ export class PixiAgent {
       }
       // Set idle frame (frame 1 of DIR_DOWN)
       this.sprite.texture = this.frames[DIR_DOWN * SHEET_COLS + 1];
+      // Scale up sprite for better visibility (48px sprites → 64px display)
+      this.sprite.width = FRAME_SIZE * 1.5;
+      this.sprite.height = FRAME_SIZE * 1.5;
       this.textureLoaded = true;
     } catch {
       // Fallback: create a colored rectangle placeholder
