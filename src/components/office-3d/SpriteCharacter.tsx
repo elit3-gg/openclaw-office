@@ -6,32 +6,16 @@ import {
   tickIdleBehavior,
   getIdleFacingDirection,
 } from "@/lib/idle-behaviors";
+import { getSpritePathForAgent } from "@/lib/agent-sprites";
 
 const SHEET_COLS = 4;
 const SHEET_ROWS = 4;
-const NUM_SKINS = 20;
 
 // Direction rows in spritesheet
 const DIR_DOWN = 0;
 const DIR_LEFT = 1;
 const DIR_RIGHT = 2;
 const DIR_UP = 3;
-
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-function skinIndexFromId(id: string): number {
-  return (hashString(id) % NUM_SKINS) + 1;
-}
-
-function padSkin(n: number): string {
-  return String(n).padStart(3, "0");
-}
 
 interface SpriteCharacterProps {
   agentId: string;
@@ -68,8 +52,7 @@ export function SpriteCharacter({
   const currentDir = useRef(DIR_DOWN);
   const idleBehavior = useRef(createIdleBehaviorState());
 
-  const skinIdx = useMemo(() => skinIndexFromId(agentId), [agentId]);
-  const texturePath = useMemo(() => `/sprites/characters/Character_${padSkin(skinIdx)}.png`, [skinIdx]);
+  const texturePath = useMemo(() => getSpritePathForAgent(agentId), [agentId]);
 
   // Load the sprite sheet texture
   const texture = useLoader(THREE.TextureLoader, texturePath);

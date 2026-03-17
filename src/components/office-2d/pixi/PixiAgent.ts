@@ -16,34 +16,18 @@ import {
   getIdleFacingDirection,
   type IdleBehaviorState,
 } from "@/lib/idle-behaviors";
+import { getSpritePathForAgent } from "@/lib/agent-sprites";
 
 const FRAME_SIZE = 48;
 const SHEET_COLS = 4;
 const ANIM_SPEED = 0.1;
 const LERP_SPEED = 0.08;
-const NUM_SKINS = 20;
 
 // Direction rows in spritesheet
 const DIR_DOWN = 0;
 const DIR_LEFT = 1;
 const DIR_RIGHT = 2;
 const DIR_UP = 3;
-
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-function skinIndexFromId(id: string): number {
-  return (hashString(id) % NUM_SKINS) + 1;
-}
-
-function padSkin(n: number): string {
-  return String(n).padStart(3, "0");
-}
 
 export class PixiAgent {
   public readonly container: Container;
@@ -153,8 +137,7 @@ export class PixiAgent {
   }
 
   private async loadSpriteSheet(agentId: string) {
-    const skinIdx = skinIndexFromId(agentId);
-    const path = `/sprites/characters/Character_${padSkin(skinIdx)}.png`;
+    const path = getSpritePathForAgent(agentId);
 
     try {
       // PixiJS v8: use Assets.load() to properly load and cache textures
@@ -186,9 +169,9 @@ export class PixiAgent {
     }
   }
 
-  private createFallbackTexture(agentId: string) {
+  private createFallbackTexture(_agentId: string) {
     const g = new Graphics();
-    const hue = hashString(agentId) % 360;
+    const hue = 200;
     const color = this.hslToHex(hue, 70, 60);
     g.roundRect(-16, -40, 32, 40, 6);
     g.fill(color);

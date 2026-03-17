@@ -6,6 +6,7 @@ import { ChatDockBar } from "@/components/chat/ChatDockBar";
 import { RestartBanner } from "@/components/shared/RestartBanner";
 import { ToastContainer } from "@/components/shared/ToastContainer";
 import type { GatewayWsClient } from "@/gateway/ws-client";
+import { useCasualRoaming } from "@/hooks/useCasualRoaming";
 import { useChatDockStore } from "@/store/console-stores/chat-dock-store";
 import { useOfficeStore } from "@/store/office-store";
 import { Sidebar } from "./Sidebar";
@@ -28,6 +29,9 @@ export function AppShell({ children, wsClient, isMobile = false }: AppShellProps
   const selectedAgentId = useOfficeStore((s) => s.selectedAgentId);
 
   const initEventHistory = useOfficeStore((s) => s.initEventHistory);
+
+  // Enable casual roaming for agents (coffee breaks, visiting colleagues, etc.)
+  useCasualRoaming();
 
   useEffect(() => {
     if (isMobile) {
