@@ -1,21 +1,32 @@
 import { Container, Graphics, Text, TextStyle } from "pixi.js";
-import { OFFICE, ZONES, SVG_WIDTH, SVG_HEIGHT, STATUS_COLORS } from "@/lib/constants";
+import { OFFICE, ZONES, SVG_WIDTH, SVG_HEIGHT } from "@/lib/constants";
 import type { VisualAgent } from "@/gateway/types";
 
-const MAP_WIDTH = 160;
-const MAP_HEIGHT = 90;
-const MAP_MARGIN = 10;
-const MAP_PADDING = 4;
+const MAP_WIDTH = 170;
+const MAP_HEIGHT = 96;
+const MAP_MARGIN = 12;
+const MAP_PADDING = 5;
 
 // Scale from world coords to minimap
 const SCALE_X = (MAP_WIDTH - MAP_PADDING * 2) / SVG_WIDTH;
 const SCALE_Y = (MAP_HEIGHT - MAP_PADDING * 2) / SVG_HEIGHT;
 
+// Status colors (hex)
+const STATUS_MAP: Record<string, number> = {
+  idle: 0x22c55e,
+  thinking: 0x3b82f6,
+  tool_calling: 0xf97316,
+  speaking: 0xa855f7,
+  spawning: 0x06b6d4,
+  error: 0xef4444,
+  offline: 0x6b7280,
+};
+
 const ZONE_MINIMAP_COLORS: Record<string, number> = {
-  desk: 0x1e293b,
-  meeting: 0x1a2744,
-  hotDesk: 0x1e2433,
-  lounge: 0x231e33,
+  desk: 0x2a2a42,
+  meeting: 0x2e2844,
+  hotDesk: 0x2a2d40,
+  lounge: 0x332844,
 };
 
 export class MiniMap {
@@ -26,23 +37,21 @@ export class MiniMap {
   private agentGraphics: Graphics;
   private viewportRect: Graphics;
 
-  // For click-to-jump
   private _onJump: ((worldX: number, worldY: number) => void) | null = null;
-
 
   constructor() {
     this.container = new Container();
     this.container.sortableChildren = true;
 
-    // Background
+    // Background — dark frosted panel
     this.bg = new Graphics();
-    this.bg.roundRect(0, 0, MAP_WIDTH, MAP_HEIGHT, 6);
-    this.bg.fill({ color: 0x0a0e1a, alpha: 0.85 });
-    this.bg.stroke({ color: 0x334155, width: 1 });
+    this.bg.roundRect(0, 0, MAP_WIDTH, MAP_HEIGHT, 8);
+    this.bg.fill({ color: 0x0d0d1a, alpha: 0.9 });
+    this.bg.stroke({ color: 0x3a3a5a, width: 1, alpha: 0.5 });
     this.bg.zIndex = 0;
     this.container.addChild(this.bg);
 
-    // Zone colors
+    // Zone fills
     this.zoneGraphics = new Graphics();
     this.zoneGraphics.zIndex = 1;
     this.drawZones();
@@ -63,10 +72,10 @@ export class MiniMap {
       text: "MAP",
       style: new TextStyle({
         fontSize: 7,
-        fontFamily: "monospace",
-        fill: 0x64748b,
+        fontFamily: "'JetBrains Mono', monospace",
+        fill: 0x6a6a8a,
         fontWeight: "bold",
-        letterSpacing: 1,
+        letterSpacing: 1.5,
       }),
     });
     title.x = MAP_WIDTH / 2;
@@ -93,13 +102,13 @@ export class MiniMap {
       MAP_PADDING + OFFICE.y * SCALE_Y,
       OFFICE.width * SCALE_X,
       OFFICE.height * SCALE_Y,
-      2,
+      3,
     );
-    this.zoneGraphics.fill({ color: 0x0f172a, alpha: 0.8 });
+    this.zoneGraphics.fill({ color: 0x252540, alpha: 0.9 });
 
     // Zone fills
     for (const [key, zone] of Object.entries(ZONES)) {
-      const color = ZONE_MINIMAP_COLORS[key] ?? 0x1e293b;
+      const color = ZONE_MINIMAP_COLORS[key] ?? 0x2a2a42;
       this.zoneGraphics.rect(
         MAP_PADDING + zone.x * SCALE_X,
         MAP_PADDING + zone.y * SCALE_Y,
@@ -114,16 +123,15 @@ export class MiniMap {
     this.agentGraphics.clear();
 
     for (const [, agent] of agents) {
-      const color = STATUS_COLORS[agent.status] ?? "#6b7280";
-      const hex = parseInt(color.replace("#", ""), 16);
+      const hex = STATUS_MAP[agent.status] ?? 0x6b7280;
       const mx = MAP_PADDING + agent.position.x * SCALE_X;
       const my = MAP_PADDING + agent.position.y * SCALE_Y;
 
       // Glow
-      this.agentGraphics.circle(mx, my, 3);
+      this.agentGraphics.circle(mx, my, 3.5);
       this.agentGraphics.fill({ color: hex, alpha: 0.3 });
       // Dot
-      this.agentGraphics.circle(mx, my, 1.5);
+      this.agentGraphics.circle(mx, my, 2);
       this.agentGraphics.fill(hex);
     }
   }
@@ -136,15 +144,14 @@ export class MiniMap {
     const rh = height * SCALE_Y;
 
     this.viewportRect.rect(rx, ry, rw, rh);
-    this.viewportRect.stroke({ color: 0x60a5fa, width: 1, alpha: 0.8 });
-    this.viewportRect.fill({ color: 0x60a5fa, alpha: 0.05 });
+    this.viewportRect.stroke({ color: 0x7c6ff5, width: 1.2, alpha: 0.7 });
+    this.viewportRect.fill({ color: 0x7c6ff5, alpha: 0.04 });
   }
 
   public onJump(cb: (worldX: number, worldY: number) => void): void {
     this._onJump = cb;
   }
 
-  /** Position the minimap in the bottom-right of the screen */
   public position(screenW: number, screenH: number): void {
     this.container.x = screenW - MAP_WIDTH - MAP_MARGIN;
     this.container.y = screenH - MAP_HEIGHT - MAP_MARGIN;

@@ -45,7 +45,7 @@ export function PixiFloorPlan() {
     const init = async () => {
       await app.init({
         resizeTo: el,
-        background: 0x0a0e1a,
+        background: 0x0d0d1a,
         antialias: false,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
@@ -354,7 +354,7 @@ export function PixiFloorPlan() {
     <div
       ref={containerRef}
       className="relative h-full w-full"
-      style={{ background: "#0a0e1a" }}
+      style={{ background: "#0d0d1a" }}
     />
   );
 }
