@@ -7,8 +7,11 @@ import { useOfficeStore } from "@/store/office-store";
 import { AgentSelector } from "./AgentSelector";
 import { MarkdownContent } from "./MarkdownContent";
 import { MessageBubble } from "./MessageBubble";
+import { OfficeFeed } from "./OfficeFeed";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { StreamingIndicator } from "./StreamingIndicator";
+
+type ChatTab = "all" | "chat";
 
 const MIN_HEIGHT = 220;
 const MAX_HEIGHT_RATIO = 0.7;
@@ -68,6 +71,7 @@ export function ChatDialog() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [input, setInput] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const [activeTab, setActiveTab] = useState<ChatTab>("all");
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
   const prevExpanded = useRef(false);
@@ -224,9 +228,35 @@ export function ChatDialog() {
         <div className="h-0.5 w-8 rounded-full bg-gray-300 dark:bg-gray-600" />
       </div>
 
-      {/* Header: session switcher + minimize button */}
+      {/* Header: tabs + session switcher + minimize */}
       <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-3 py-1 dark:border-gray-800">
-        <SessionSwitcher />
+        <div className="flex items-center gap-1">
+          {/* Tab buttons */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              activeTab === "all"
+                ? "bg-[#7c6ff5]/15 text-[#7c6ff5]"
+                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            }`}
+          >
+            🏢 All
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("chat")}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              activeTab === "chat"
+                ? "bg-[#7c6ff5]/15 text-[#7c6ff5]"
+                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            }`}
+          >
+            💬 Chat
+          </button>
+          <div className="mx-1.5 h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          {activeTab === "chat" && <SessionSwitcher />}
+        </div>
         <button
           type="button"
           onClick={() => setDockExpanded(false)}
@@ -237,8 +267,15 @@ export function ChatDialog() {
         </button>
       </div>
 
-      {/* Sub-agent context banner */}
-      {targetAgent?.isSubAgent && (
+      {/* ═══ "All" tab - Office Feed ═══ */}
+      {activeTab === "all" && (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <OfficeFeed />
+        </div>
+      )}
+
+      {/* ═══ "Chat" tab - normal chat ═══ */}
+      {activeTab === "chat" && targetAgent?.isSubAgent && (
         <div className="flex shrink-0 items-center gap-2 border-b border-purple-100 bg-purple-50 px-3 py-1.5 text-xs dark:border-purple-900/30 dark:bg-purple-900/10">
           <span className="rounded bg-purple-100 px-1 py-0.5 text-[9px] font-medium text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
             sub-agent
@@ -253,15 +290,15 @@ export function ChatDialog() {
       )}
 
       {/* Loading state */}
-      {isHistoryLoading && (
+      {activeTab === "chat" && isHistoryLoading && (
         <div className="flex shrink-0 items-center justify-center gap-2 py-3 text-sm text-gray-400">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>{t("chatDialog.loadingHistory")}</span>
         </div>
       )}
 
-      {/* Messages area — flex-1 fills remaining space */}
-      <div
+      {/* Messages area - flex-1 fills remaining space */}
+      {activeTab === "chat" && <div
         ref={scrollRef}
         onScroll={handleScroll}
         className="relative min-h-0 flex-1 overflow-y-auto px-4 py-2"
@@ -305,10 +342,10 @@ export function ChatDialog() {
             <ArrowDown className="h-4 w-4 text-gray-500" />
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Error banner */}
-      {error && (
+      {activeTab === "chat" && error && (
         <div className="flex shrink-0 items-center justify-between bg-red-50 px-3 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
           <span className="truncate">{error}</span>
           <button
@@ -321,8 +358,8 @@ export function ChatDialog() {
         </div>
       )}
 
-      {/* Input area — pinned to bottom */}
-      <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+      {/* Input area — pinned to bottom (both tabs) */}
+      <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900" onClick={() => { if (activeTab === "all") setActiveTab("chat"); }}>
         <div className="flex items-end gap-2">
           <AgentSelector />
           <button
