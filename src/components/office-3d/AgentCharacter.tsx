@@ -59,45 +59,48 @@ function statusGlowIntensity(status: VisualAgent["status"]): number {
 
 // Height constants for positioning overlays relative to characters (1.0 world-unit tall)
 const CHAR_TOP = 1.15; // Top of 1.0-height character + margin
-const NAME_Y = -0.15;  // Below character feet
+const NAME_Y = CHAR_TOP; // Name plate floats just above character head
 
-/** Floating name plate — matches 2D PixiAgent style */
+/** Floating name plate — matches 2D PixiAgent style, positioned above character head */
 function NamePlate({ name, status }: { name: string; status: VisualAgent["status"] }) {
   const statusColor = statusGlowColor(status);
   const displayName = name.length > 12 ? name.slice(0, 11) + "…" : name;
 
   return (
-    <Html position={[0, NAME_Y, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, NAME_Y, 0]} center sprite style={{ pointerEvents: "none" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "5px",
-          padding: "2px 8px",
+          padding: "3px 10px",
           borderRadius: "6px",
-          background: "rgba(26, 26, 46, 0.85)",
-          border: "0.5px solid rgba(58, 58, 90, 0.6)",
+          background: "rgba(26, 26, 46, 0.9)",
+          border: "1px solid rgba(58, 58, 90, 0.6)",
+          backdropFilter: "blur(4px)",
           whiteSpace: "nowrap",
           userSelect: "none",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
         }}
       >
         {/* Status dot */}
         <div
           style={{
-            width: "6px",
-            height: "6px",
+            width: "7px",
+            height: "7px",
             borderRadius: "50%",
             backgroundColor: statusColor === "#000000" ? "#6b7280" : statusColor,
-            boxShadow: statusColor !== "#000000" ? `0 0 4px ${statusColor}` : undefined,
+            boxShadow: statusColor !== "#000000" ? `0 0 6px ${statusColor}` : undefined,
+            flexShrink: 0,
           }}
         />
         <span
           style={{
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: "10px",
+            fontSize: "11px",
             fontWeight: 600,
             color: "#ffffff",
-            lineHeight: "14px",
+            lineHeight: "16px",
           }}
         >
           {displayName}
@@ -107,7 +110,7 @@ function NamePlate({ name, status }: { name: string; status: VisualAgent["status
   );
 }
 
-/** Status icon shown floating above head */
+/** Status icon shown floating above name plate */
 function StatusIcon({ status }: { status: VisualAgent["status"] }) {
   if (status === "idle" || status === "offline") return null;
 
@@ -123,9 +126,9 @@ function StatusIcon({ status }: { status: VisualAgent["status"] }) {
   if (!info) return null;
 
   return (
-    <Html position={[0, CHAR_TOP + 0.1, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.2, 0]} center sprite style={{ pointerEvents: "none" }}>
       <div
-        className={`flex h-5 w-5 items-center justify-center rounded-full ${info.bg} text-[10px] shadow-lg`}
+        className={`flex h-6 w-6 items-center justify-center rounded-full ${info.bg} text-xs shadow-lg`}
         style={{ animation: "pulse 2s ease-in-out infinite" }}
       >
         {info.icon}
@@ -212,17 +215,18 @@ function SpawnParticles({ active }: { active: boolean }) {
 function SpeechBubbleOverlay({ text }: { text: string }) {
   const truncated = text.length > 100 ? text.slice(0, 97) + "..." : text;
   return (
-    <Html position={[0, CHAR_TOP + 0.25, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.35, 0]} center sprite style={{ pointerEvents: "none" }}>
       <div className="pointer-events-none" style={{ animation: "pulse 3s ease-in-out infinite" }}>
         <div
           style={{
             position: "relative",
-            maxWidth: "180px",
+            maxWidth: "200px",
             padding: "6px 10px",
             borderRadius: "8px",
             background: "rgba(30, 30, 58, 0.95)",
             border: "1.5px solid rgba(168, 85, 247, 0.6)",
             boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            backdropFilter: "blur(4px)",
             wordBreak: "break-word",
           }}
         >
@@ -266,30 +270,31 @@ function ActivityDialogueBubble({ agentId }: { agentId: string }) {
   if (!dialogue) return null;
 
   return (
-    <Html position={[0, CHAR_TOP + 0.3, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.35, 0]} center sprite style={{ pointerEvents: "none" }}>
       <div
         style={{
           position: "relative",
-          maxWidth: "160px",
+          maxWidth: "180px",
           padding: "5px 10px",
           borderRadius: "8px",
           background: "rgba(26, 26, 46, 0.92)",
           border: "1px solid rgba(124, 111, 245, 0.5)",
           boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+          backdropFilter: "blur(4px)",
           animation: "fadeIn 0.3s ease-out",
         }}
       >
         <span
           style={{
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontSize: "9px",
-            lineHeight: "13px",
+            fontSize: "10px",
+            lineHeight: "14px",
             color: "#e0e0e0",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
             display: "block",
-            maxWidth: "140px",
+            maxWidth: "160px",
           }}
         >
           {dialogue}
@@ -367,17 +372,17 @@ function InteractionBubble({ agentId }: { agentId: string }) {
   }
 
   return (
-    <Html position={[0, CHAR_TOP + 0.15, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.2, 0]} center sprite style={{ pointerEvents: "none" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: "22px",
-          height: "22px",
+          width: "24px",
+          height: "24px",
           borderRadius: "50%",
           background: bgColor,
-          fontSize: "12px",
+          fontSize: "13px",
           boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
           animation: isSpeaking ? "pulse 1.5s ease-in-out infinite" : undefined,
         }}
@@ -578,7 +583,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
 
         {/* Sub-agent "S" badge */}
         {isSubAgent && !isPlaceholder && (
-          <Html position={[0.25, 0.9, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
+          <Html position={[0.3, 0.95, 0.1]} center sprite style={{ pointerEvents: "none" }}>
             <div
               style={{
                 display: "flex",
@@ -653,18 +658,19 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       )}
 
       {hovered && (
-        <Html position={[0, CHAR_TOP + 0.05, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+        <Html position={[0, CHAR_TOP + 0.25, 0]} center sprite style={{ pointerEvents: "none" }}>
           <div
             style={{
               whiteSpace: "nowrap",
-              padding: "3px 8px",
+              padding: "4px 10px",
               borderRadius: "6px",
-              background: "rgba(26, 26, 46, 0.92)",
-              border: "1px solid rgba(58, 58, 90, 0.6)",
+              background: "rgba(26, 26, 46, 0.95)",
+              border: "1px solid rgba(124, 111, 245, 0.5)",
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               fontSize: "11px",
               color: "#ffffff",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+              backdropFilter: "blur(4px)",
               pointerEvents: "none",
             }}
           >
