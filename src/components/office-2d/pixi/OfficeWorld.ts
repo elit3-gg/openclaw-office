@@ -1605,6 +1605,12 @@ export class OfficeWorld {
       dot.graphics.alpha = pulse;
     }
 
+    // Entrance glow pulse
+    this.entrancePhase += 0.02 * dt;
+    if (this.entranceGlowGraphics) {
+      const pulse = 0.7 + 0.3 * Math.sin(this.entrancePhase);
+      this.entranceGlowGraphics.alpha = pulse;
+    }
   }
 
   /** Update zone agent counts for activity ring brightness */

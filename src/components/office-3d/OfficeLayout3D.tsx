@@ -779,7 +779,7 @@ function ZoneSign3D({
         color="#ffffff"
         anchorX="center"
         anchorY="middle"
-        font="/fonts/JetBrainsMono-Bold.woff"
+        font="/fonts/silkscreen.ttf"
       >
         {text}
       </Text>
