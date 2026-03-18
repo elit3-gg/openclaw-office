@@ -5,6 +5,7 @@ import {
   SVG_WIDTH,
   SVG_HEIGHT,
 } from "@/lib/constants";
+import { getLightingParams } from "@/lib/ambient-cycle";
 
 // ═══════════════════════════════════════════════════════════
 // Gather.town-inspired dark office world
@@ -79,6 +80,30 @@ interface GlowingObject {
   color: number;
 }
 
+interface ZoneBoundaryGlow {
+  thickLine: Graphics;
+  thinLine: Graphics;
+  baseAlpha: number;
+  phase: number;
+}
+
+interface ZoneActivityRing {
+  graphics: Graphics;
+  zoneKey: string;
+  cx: number;
+  cy: number;
+  color: number;
+  phase: number;
+  agentCount: number;
+}
+
+interface CorridorLightDot {
+  x: number;
+  y: number;
+  graphics: Graphics;
+  phase: number;
+}
+
 export class OfficeWorld {
   public readonly container: Container;
 
@@ -103,9 +128,25 @@ export class OfficeWorld {
 
   // Glowing objects for ambient life
   private glowingObjects: GlowingObject[] = [];
-  
+
   // Ceiling lights
   private ceilingLights: { x: number; y: number; graphics: Graphics }[] = [];
+
+  // Zone boundary glow lines
+  private zoneBoundaryGlows: ZoneBoundaryGlow[] = [];
+  private zoneBoundaryLayer: Container;
+
+  // Zone activity indicators
+  private zoneActivityRings: ZoneActivityRing[] = [];
+  private zoneActivityLayer: Container;
+
+  // Corridor light dots
+  private corridorLightDots: CorridorLightDot[] = [];
+  private corridorEnhanceLayer: Container;
+
+  // Entrance enhancements
+  private entranceGlowGraphics: Graphics | null = null;
+  private entrancePhase: number = 0;
 
   constructor() {
     this.container = new Container();
@@ -139,9 +180,21 @@ export class OfficeWorld {
     this.gridLayer.zIndex = 8;
     this.gridLayer.visible = false;
 
+    this.zoneBoundaryLayer = new Container();
+    this.zoneBoundaryLayer.zIndex = 3;
+
+    this.zoneActivityLayer = new Container();
+    this.zoneActivityLayer.zIndex = 2;
+
+    this.corridorEnhanceLayer = new Container();
+    this.corridorEnhanceLayer.zIndex = 2;
+
     this.container.addChild(
       this.backgroundLayer,
       this.floorLayer,
+      this.corridorEnhanceLayer,
+      this.zoneActivityLayer,
+      this.zoneBoundaryLayer,
       this.furnitureLayer,
       this.decorLayer,
       this.wallLayer,
@@ -165,6 +218,9 @@ export class OfficeWorld {
 
     this.buildBackground();
     this.buildFloors();
+    this.buildCorridorEnhancements();
+    this.buildZoneBoundaryGlows();
+    this.buildZoneActivityRings();
     this.buildWalls();
     this.buildDoors();
     this.buildFurniture();
@@ -345,6 +401,186 @@ export class OfficeWorld {
 
     this.floorLayer.addChild(g);
     this.floorLayer.addChild(dashG);
+  }
+
+  // ─── ZONE BOUNDARY GLOW LINES ────────────────────────────
+
+  private buildZoneBoundaryGlows(): void {
+    const cw = OFFICE.corridorWidth;
+    const midX = OFFICE.x + (OFFICE.width - cw) / 2;
+    const midY = OFFICE.y + (OFFICE.height - cw) / 2;
+
+    // Define zone border segments that face the corridor
+    const segments: { x1: number; y1: number; x2: number; y2: number }[] = [
+      // Desk zone: right edge (facing vertical corridor)
+      { x1: midX, y1: OFFICE.y, x2: midX, y2: midY },
+      // Desk zone: bottom edge (facing horizontal corridor)
+      { x1: OFFICE.x, y1: midY, x2: midX, y2: midY },
+      // Meeting zone: left edge
+      { x1: midX + cw, y1: OFFICE.y, x2: midX + cw, y2: midY },
+      // Meeting zone: bottom edge
+      { x1: midX + cw, y1: midY, x2: OFFICE.x + OFFICE.width, y2: midY },
+      // Hot desk zone: right edge
+      { x1: midX, y1: midY + cw, x2: midX, y2: OFFICE.y + OFFICE.height },
+      // Hot desk zone: top edge
+      { x1: OFFICE.x, y1: midY + cw, x2: midX, y2: midY + cw },
+      // Lounge zone: left edge
+      { x1: midX + cw, y1: midY + cw, x2: midX + cw, y2: OFFICE.y + OFFICE.height },
+      // Lounge zone: top edge
+      { x1: midX + cw, y1: midY + cw, x2: OFFICE.x + OFFICE.width, y2: midY + cw },
+    ];
+
+    for (const seg of segments) {
+      // Thick blurred glow line
+      const thick = new Graphics();
+      thick.moveTo(seg.x1, seg.y1);
+      thick.lineTo(seg.x2, seg.y2);
+      thick.stroke({ color: 0x7c6ff5, width: 8, alpha: 0.15 });
+      this.zoneBoundaryLayer.addChild(thick);
+
+      // Thin bright line
+      const thin = new Graphics();
+      thin.moveTo(seg.x1, seg.y1);
+      thin.lineTo(seg.x2, seg.y2);
+      thin.stroke({ color: 0x7c6ff5, width: 1.5, alpha: 0.6 });
+      this.zoneBoundaryLayer.addChild(thin);
+
+      this.zoneBoundaryGlows.push({
+        thickLine: thick,
+        thinLine: thin,
+        baseAlpha: 1,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  // ─── ZONE ACTIVITY INDICATORS ──────────────────────────
+
+  private buildZoneActivityRings(): void {
+    const zoneThemeColors: Record<string, number> = {
+      desk: ACCENT_BLUE,
+      meeting: ACCENT_PURPLE,
+      hotDesk: ACCENT_CYAN,
+      lounge: ACCENT_WARM,
+    };
+
+    for (const [key, zone] of Object.entries(ZONES)) {
+      const color = zoneThemeColors[key] ?? 0x7c6ff5;
+      const cx = zone.x + zone.width / 2;
+      const cy = zone.y + zone.height / 2;
+
+      const ringG = new Graphics();
+      ringG.circle(cx, cy, 35);
+      ringG.stroke({ color, width: 1.5, alpha: 0.05 });
+      this.zoneActivityLayer.addChild(ringG);
+
+      this.zoneActivityRings.push({
+        graphics: ringG,
+        zoneKey: key,
+        cx,
+        cy,
+        color,
+        phase: Math.random() * Math.PI * 2,
+        agentCount: 0,
+      });
+    }
+  }
+
+  // ─── CORRIDOR ENHANCEMENTS ─────────────────────────────
+
+  private buildCorridorEnhancements(): void {
+    const cw = OFFICE.corridorWidth;
+    const midX = OFFICE.x + (OFFICE.width - cw) / 2;
+    const midY = OFFICE.y + (OFFICE.height - cw) / 2;
+
+    const g = new Graphics();
+
+    // Directional arrows along horizontal corridor (very subtle)
+    const arrowSpacing = 48;
+    const arrowSize = 4;
+    const corridorCenterY = midY + cw / 2;
+    for (let x = OFFICE.x + 20; x < OFFICE.x + OFFICE.width - 20; x += arrowSpacing) {
+      // Right-pointing arrow (top half of corridor)
+      const ay = corridorCenterY - 4;
+      g.moveTo(x, ay - arrowSize * 0.5);
+      g.lineTo(x + arrowSize, ay);
+      g.lineTo(x, ay + arrowSize * 0.5);
+      g.stroke({ color: 0x6a6a9a, width: 0.5, alpha: 0.08 });
+
+      // Left-pointing arrow (bottom half)
+      const ay2 = corridorCenterY + 4;
+      g.moveTo(x + arrowSize, ay2 - arrowSize * 0.5);
+      g.lineTo(x, ay2);
+      g.lineTo(x + arrowSize, ay2 + arrowSize * 0.5);
+      g.stroke({ color: 0x6a6a9a, width: 0.5, alpha: 0.08 });
+    }
+
+    // Directional arrows along vertical corridor
+    const corridorCenterX = midX + cw / 2;
+    for (let y = OFFICE.y + 20; y < OFFICE.y + OFFICE.height - 20; y += arrowSpacing) {
+      // Down-pointing arrow (left half)
+      const ax = corridorCenterX - 4;
+      g.moveTo(ax - arrowSize * 0.5, y);
+      g.lineTo(ax, y + arrowSize);
+      g.lineTo(ax + arrowSize * 0.5, y);
+      g.stroke({ color: 0x6a6a9a, width: 0.5, alpha: 0.08 });
+
+      // Up-pointing arrow (right half)
+      const ax2 = corridorCenterX + 4;
+      g.moveTo(ax2 - arrowSize * 0.5, y + arrowSize);
+      g.lineTo(ax2, y);
+      g.lineTo(ax2 + arrowSize * 0.5, y + arrowSize);
+      g.stroke({ color: 0x6a6a9a, width: 0.5, alpha: 0.08 });
+    }
+
+    // Faint glow along corridor center lines
+    // Horizontal center glow
+    g.moveTo(OFFICE.x, corridorCenterY);
+    g.lineTo(OFFICE.x + OFFICE.width, corridorCenterY);
+    g.stroke({ color: 0x7c6ff5, width: 3, alpha: 0.04 });
+    g.moveTo(OFFICE.x, corridorCenterY);
+    g.lineTo(OFFICE.x + OFFICE.width, corridorCenterY);
+    g.stroke({ color: 0x7c6ff5, width: 1, alpha: 0.08 });
+
+    // Vertical center glow
+    g.moveTo(corridorCenterX, OFFICE.y);
+    g.lineTo(corridorCenterX, OFFICE.y + OFFICE.height);
+    g.stroke({ color: 0x7c6ff5, width: 3, alpha: 0.04 });
+    g.moveTo(corridorCenterX, OFFICE.y);
+    g.lineTo(corridorCenterX, OFFICE.y + OFFICE.height);
+    g.stroke({ color: 0x7c6ff5, width: 1, alpha: 0.08 });
+
+    this.corridorEnhanceLayer.addChild(g);
+
+    // Small light dots at corridor intersections
+    const intersections = [
+      { x: corridorCenterX, y: corridorCenterY }, // Main crossing
+      { x: midX, y: corridorCenterY },            // Left T-junction
+      { x: midX + cw, y: corridorCenterY },       // Right T-junction
+      { x: corridorCenterX, y: midY },            // Top T-junction
+      { x: corridorCenterX, y: midY + cw },       // Bottom T-junction
+    ];
+
+    for (const pos of intersections) {
+      const dotG = new Graphics();
+      // Outer soft glow
+      dotG.circle(pos.x, pos.y, 6);
+      dotG.fill({ color: 0x7c6ff5, alpha: 0.06 });
+      // Inner bright dot
+      dotG.circle(pos.x, pos.y, 2);
+      dotG.fill({ color: 0x9a8aff, alpha: 0.25 });
+      // Core
+      dotG.circle(pos.x, pos.y, 0.8);
+      dotG.fill({ color: 0xffffff, alpha: 0.3 });
+      this.corridorEnhanceLayer.addChild(dotG);
+
+      this.corridorLightDots.push({
+        x: pos.x,
+        y: pos.y,
+        graphics: dotG,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
   }
 
   // ─── WALLS ────────────────────────────────────────────────
@@ -1071,32 +1307,69 @@ export class OfficeWorld {
     // Welcome mat
     g.roundRect(doorCX - 32, doorY - 20, 64, 14, 4);
     g.fill({ color: 0x4a3a2a, alpha: 0.5 });
-    g.stroke({ color: 0x6a5a4a, width: 0.5, alpha: 0.3 });
+    g.stroke({ color: 0x7c6ff5, width: 0.8, alpha: 0.25 });
+    // Mat inner glow
+    g.roundRect(doorCX - 28, doorY - 18, 56, 10, 3);
+    g.fill({ color: 0x7c6ff5, alpha: 0.06 });
+    // Welcome mat outer halo
+    g.roundRect(doorCX - 40, doorY - 24, 80, 22, 6);
+    g.fill({ color: 0x7c6ff5, alpha: 0.04 });
+
+    // Light beam from outside
+    const beamG = new Graphics();
+    beamG.moveTo(doorCX - half - 10, doorY + 2);
+    beamG.lineTo(doorCX + half + 10, doorY + 2);
+    beamG.lineTo(doorCX + half + 30, doorY + 50);
+    beamG.lineTo(doorCX - half - 30, doorY + 50);
+    beamG.closePath();
+    beamG.fill({ color: 0xaabbff, alpha: 0.015 });
+    beamG.moveTo(doorCX - half + 5, doorY + 2);
+    beamG.lineTo(doorCX + half - 5, doorY + 2);
+    beamG.lineTo(doorCX + half + 10, doorY + 35);
+    beamG.lineTo(doorCX - half - 10, doorY + 35);
+    beamG.closePath();
+    beamG.fill({ color: 0xccddff, alpha: 0.025 });
+    this.wallLayer.addChild(beamG);
 
     this.wallLayer.addChild(g);
 
-    // Entrance label
+    // "ENTRANCE" neon text
     const entranceLabel = new Text({
-      text: "▼  ENTRANCE  ▼",
+      text: "ENTRANCE",
       style: new TextStyle({
-        fontSize: 8,
+        fontSize: 9,
         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-        fill: 0x6a6a8a,
+        fill: 0xb8a0ff,
         fontWeight: "bold",
-        letterSpacing: 2,
+        letterSpacing: 4,
       }),
     });
     entranceLabel.anchor.set(0.5, 0);
     entranceLabel.x = doorCX;
-    entranceLabel.y = doorY + 8;
+    entranceLabel.y = doorY + 6;
     this.wallLayer.addChild(entranceLabel);
 
-    // Glowing entrance indicator
+    // Neon glow behind text (animated)
+    const entranceGlow = new Graphics();
+    entranceGlow.roundRect(doorCX - 42, doorY + 4, 84, 16, 3);
+    entranceGlow.fill({ color: 0x7c6ff5, alpha: 0.06 });
+    entranceGlow.rect(doorCX - 35, doorY + 20, 70, 1.5);
+    entranceGlow.fill({ color: 0x7c6ff5, alpha: 0.3 });
+    entranceGlow.rect(doorCX - 35, doorY + 20, 70, 3);
+    entranceGlow.fill({ color: 0x7c6ff5, alpha: 0.08 });
+    this.entranceGlowGraphics = entranceGlow;
+    this.wallLayer.addChild(entranceGlow);
+
+    // Glowing entrance threshold bar
     const glowG = new Graphics();
     glowG.rect(doorCX - half, doorY - 2, doorW, 3);
-    glowG.fill({ color: ACCENT_CYAN, alpha: 0.25 });
+    glowG.fill({ color: 0x7c6ff5, alpha: 0.3 });
     glowG.rect(doorCX - half + 5, doorY - 1, doorW - 10, 1);
-    glowG.fill({ color: ACCENT_CYAN, alpha: 0.15 });
+    glowG.fill({ color: 0xb8a0ff, alpha: 0.2 });
+    glowG.circle(doorCX - half - 1, doorY, 2);
+    glowG.fill({ color: 0x7c6ff5, alpha: 0.4 });
+    glowG.circle(doorCX + half + 1, doorY, 2);
+    glowG.fill({ color: 0x7c6ff5, alpha: 0.4 });
     this.wallLayer.addChild(glowG);
   }
 
@@ -1219,7 +1492,17 @@ export class OfficeWorld {
     this.steamGraphics.clear();
     this.ambientPhase += 0.01 * dt;
 
-    // Ambient particles
+    // Get ambient cycle lighting params
+    const cycleParams = getLightingParams();
+    const particleDensityMultiplier = cycleParams.particleDensity;
+    const lightsOn = cycleParams.ceilingLightsOn;
+
+    // Update ceiling lights based on time of day
+    for (const light of this.ceilingLights) {
+      light.graphics.alpha = lightsOn ? 1 : 0.15;
+    }
+
+    // Ambient particles (density affected by day/night)
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -1251,7 +1534,7 @@ export class OfficeWorld {
 
       const fadeIn = Math.min(p.life / 40, 1);
       const fadeOut = Math.max(0, 1 - (p.life - p.maxLife + 40) / 40);
-      const alpha = p.alpha * fadeIn * fadeOut;
+      const alpha = p.alpha * fadeIn * fadeOut * particleDensityMultiplier;
 
       this.particleGraphics.circle(p.x, p.y, p.size);
       this.particleGraphics.fill({ color: p.color, alpha });
@@ -1284,17 +1567,50 @@ export class OfficeWorld {
       this.steamGraphics.fill({ color: 0xffffff, alpha: Math.max(0, sp.alpha) });
     }
 
-    // Glowing objects pulse
+    // Glowing objects pulse (affected by lights on/off)
     for (const glow of this.glowingObjects) {
       glow.phase += glow.speed * 0.016 * dt;
-      const pulse = glow.baseAlpha * (0.8 + 0.2 * Math.sin(glow.phase));
-      glow.graphics.alpha = pulse;
+      const basePulse = glow.baseAlpha * (0.8 + 0.2 * Math.sin(glow.phase));
+      glow.graphics.alpha = lightsOn ? basePulse : basePulse * 0.3;
     }
 
-    // Subtle ambient glow pulse
+    // Subtle ambient glow pulse (warmer/dimmer based on time)
     if (this.ambientGraphics) {
-      const pulse = 0.3 + 0.15 * Math.sin(this.ambientPhase);
-      this.ambientGraphics.alpha = pulse;
+      const warmthBoost = cycleParams.warmth * 0.2;
+      const pulse = (0.3 + warmthBoost) + 0.15 * Math.sin(this.ambientPhase);
+      this.ambientGraphics.alpha = pulse * cycleParams.ambientIntensity * 1.5;
+    }
+
+    // Zone boundary glow pulse
+    for (const glow of this.zoneBoundaryGlows) {
+      glow.phase += 0.02 * dt;
+      const pulse = Math.sin(glow.phase) * 0.1;
+      glow.thickLine.alpha = 0.15 + pulse;
+      glow.thinLine.alpha = 0.6 + pulse;
+    }
+
+    // Zone activity rings pulse
+    for (const ring of this.zoneActivityRings) {
+      ring.phase += 0.015 * dt;
+      const agentBoost = Math.min(ring.agentCount * 0.03, 0.1);
+      const baseAlpha = 0.05 + agentBoost;
+      const pulse = baseAlpha + Math.sin(ring.phase) * 0.03;
+      ring.graphics.alpha = Math.max(0.02, pulse);
+    }
+
+    // Corridor light dots pulse
+    for (const dot of this.corridorLightDots) {
+      dot.phase += 0.018 * dt;
+      const pulse = 0.7 + 0.3 * Math.sin(dot.phase);
+      dot.graphics.alpha = pulse;
+    }
+
+  }
+
+  /** Update zone agent counts for activity ring brightness */
+  public updateZoneAgentCounts(counts: Record<string, number>): void {
+    for (const ring of this.zoneActivityRings) {
+      ring.agentCount = counts[ring.zoneKey] ?? 0;
     }
   }
 

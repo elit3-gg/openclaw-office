@@ -27,7 +27,7 @@ import { getAgentFacingTarget, getAgentDialogue, getAgentActivityType } from "@/
 
 const FRAME_SIZE = 48;
 const SHEET_COLS = 4;
-const ANIM_SPEED = 0.1;
+const ANIM_SPEED = 0.15;
 const LERP_SPEED = 0.08;
 
 // Display scale — 2.2x makes characters prominent like Gather.town
@@ -50,6 +50,18 @@ const STATUS_HEX: Record<string, number> = {
   error: 0xef4444,
   offline: 0x6b7280,
 };
+
+// Dust particle for walking trail
+interface DustParticle {
+  gfx: Graphics;
+  life: number;     // frames remaining
+  maxLife: number;
+  vx: number;
+  vy: number;
+}
+
+// Status flash transition duration (ms converted to frame ticks at ~60fps)
+const STATUS_FLASH_DURATION = 12; // ~200ms at 60fps
 
 export class PixiAgent {
   public readonly container: Container;
@@ -99,6 +111,19 @@ export class PixiAgent {
   // Walk bob
   private walkBobPhase: number = 0;
 
+  // Status flash transition
+  private prevStatus: string = "idle";
+  private statusFlashTimer: number = 0;
+
+  // Dust particle trail
+  private dustParticles: DustParticle[] = [];
+  private dustFrameCounter: number = 0;
+
+  // Idle fidget animation
+  private idleFrameCounter: number = 0;
+  private fidgetState: "none" | "look_left" | "look_right" = "none";
+  private fidgetTimer: number = 0;
+
   // Activity facing target position (set externally by PixiFloorPlan)
   private _facingTargetPos: { x: number; y: number } | null = null;
 
@@ -142,14 +167,20 @@ export class PixiAgent {
     this.nameBg.zIndex = 4;
     this.container.addChild(this.nameBg);
 
-    // Name label
+    // Name label — pixel gaming-style font with subtle glow
     this.nameLabel = new Text({
       text: this.truncateName(agent.name),
       style: new TextStyle({
-        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontFamily: "'Silkscreen', 'Press Start 2P', monospace",
         fontSize: 10,
         fill: 0xffffff,
         fontWeight: "600",
+        dropShadow: {
+          alpha: 0.6,
+          blur: 3,
+          color: 0x4a90d9,
+          distance: 0,
+        },
       }),
     });
     this.nameLabel.anchor.set(0.5, 0);
@@ -234,7 +265,11 @@ export class PixiAgent {
     this.nameLabel.text = this.truncateName(agent.name);
     this.updateNameBackground();
 
-    // Status
+    // Status — detect transitions and trigger flash
+    if (agent.status !== this.prevStatus) {
+      this.statusFlashTimer = STATUS_FLASH_DURATION;
+      this.prevStatus = agent.status;
+    }
     this.lastStatus = agent.status;
     this.updateStatusDot(agent.status);
     this.updateStatusRing(agent.status);
@@ -487,6 +522,7 @@ export class PixiAgent {
     } else {
       this.currentX = this.targetX;
       this.currentY = this.targetY;
+      this.isWalking = false;
     }
 
     // Idle behavior micro-offsets
@@ -588,6 +624,107 @@ export class PixiAgent {
       this.statusRing.fill({ color: hex, alpha: pulseAlpha });
       this.statusRing.ellipse(0, 0, 18, 6);
       this.statusRing.stroke({ color: hex, width: 1, alpha: 0.3 });
+    }
+
+    // ── Enhancement 2: Status transition flash (scale pulse) ──
+    if (this.statusFlashTimer > 0) {
+      this.statusFlashTimer -= dt;
+      const progress = Math.max(0, this.statusFlashTimer / STATUS_FLASH_DURATION);
+      // Ease-out: fast at start, slow at end
+      const eased = progress * progress;
+      const scale = 1.0 + 0.1 * eased;
+      this.sprite.scale.set(
+        (DISPLAY_SIZE / FRAME_SIZE) * scale,
+        (DISPLAY_SIZE / FRAME_SIZE) * scale,
+      );
+      // Flash the status ring brighter
+      const hex = STATUS_HEX[this.lastStatus] ?? 0x6b7280;
+      const flashAlpha = 0.15 + 0.35 * eased;
+      this.statusRing.clear();
+      this.statusRing.ellipse(0, 0, 22 + 4 * eased, 8 + 2 * eased);
+      this.statusRing.fill({ color: hex, alpha: flashAlpha });
+      this.statusRing.ellipse(0, 0, 18, 6);
+      this.statusRing.stroke({ color: hex, width: 1 + eased, alpha: 0.3 + 0.4 * eased });
+    } else {
+      // Reset scale to normal
+      this.sprite.scale.set(DISPLAY_SIZE / FRAME_SIZE, DISPLAY_SIZE / FRAME_SIZE);
+    }
+
+    // ── Enhancement 3: Walking dust particle trail ──
+    if (this.isWalking && dist > 1) {
+      this.dustFrameCounter++;
+      if (this.dustFrameCounter % 5 === 0) {
+        this.spawnDustParticle();
+      }
+    } else {
+      this.dustFrameCounter = 0;
+    }
+    this.tickDustParticles();
+
+    // ── Enhancement 4: Idle fidget animation ──
+    if (!this.isWalking || dist <= 1) {
+      this.idleFrameCounter++;
+    } else {
+      this.idleFrameCounter = 0;
+      this.fidgetState = "none";
+      this.fidgetTimer = 0;
+    }
+
+    // After ~3 seconds idle (180 frames at 60fps), random chance to fidget
+    if (this.idleFrameCounter > 180 && this.fidgetState === "none" && this.textureLoaded && this.frames.length === 16) {
+      if (Math.random() < 0.02) {
+        this.fidgetState = "look_left";
+        this.fidgetTimer = 30;
+      }
+    }
+
+    // Process fidget state machine
+    if (this.fidgetState !== "none" && this.textureLoaded && this.frames.length === 16) {
+      this.fidgetTimer -= dt;
+      if (this.fidgetState === "look_left") {
+        const frameIdx = DIR_LEFT * SHEET_COLS + 1;
+        if (this.frames[frameIdx]) {
+          this.sprite.texture = this.frames[frameIdx];
+        }
+        if (this.fidgetTimer <= 0) {
+          this.fidgetState = "look_right";
+          this.fidgetTimer = 30;
+        }
+      } else if (this.fidgetState === "look_right") {
+        const frameIdx = DIR_RIGHT * SHEET_COLS + 1;
+        if (this.frames[frameIdx]) {
+          this.sprite.texture = this.frames[frameIdx];
+        }
+        if (this.fidgetTimer <= 0) {
+          this.fidgetState = "none";
+          this.fidgetTimer = 0;
+          this.idleFrameCounter = 0; // Reset idle counter so there's a cooldown
+          // Restore to idle facing direction
+          const frameIdx2 = this.currentDir * SHEET_COLS + 1;
+          if (this.frames[frameIdx2]) {
+            this.sprite.texture = this.frames[frameIdx2];
+          }
+        }
+      }
+    }
+
+    // ── Enhancement 5: Selected agent name glow ──
+    if (this._selected) {
+      (this.nameLabel.style as TextStyle).fill = 0xffd700;
+      (this.nameLabel.style as TextStyle).fontWeight = "bold";
+      if ((this.nameLabel.style as TextStyle).dropShadow) {
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).color = 0xffd700;
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).alpha = 0.9;
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).blur = 5;
+      }
+    } else {
+      (this.nameLabel.style as TextStyle).fill = 0xffffff;
+      (this.nameLabel.style as TextStyle).fontWeight = "600";
+      if ((this.nameLabel.style as TextStyle).dropShadow) {
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).color = 0x4a90d9;
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).alpha = 0.6;
+        ((this.nameLabel.style as TextStyle).dropShadow as Record<string, unknown>).blur = 3;
+      }
     }
 
     // Activity dialogue update (only when idle - not in actual AI conversation)
@@ -696,7 +833,59 @@ export class PixiAgent {
     }
   }
 
+  private spawnDustParticle(): void {
+    const gfx = new Graphics();
+    const radius = 2 + Math.random();
+    gfx.circle(0, 0, radius);
+    gfx.fill({ color: 0xc8b898, alpha: 0.3 }); // Warm floor-tone dust
+    gfx.x = this.currentX + (Math.random() - 0.5) * 8;
+    gfx.y = this.currentY + (Math.random() - 0.5) * 4;
+    gfx.zIndex = 0;
+
+    // Add to the parent container (floor level), not the agent container
+    // so particles stay in world space
+    if (this.container.parent) {
+      this.container.parent.addChild(gfx);
+    } else {
+      this.container.addChild(gfx);
+    }
+
+    this.dustParticles.push({
+      gfx,
+      life: 20,
+      maxLife: 20,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -0.3 - Math.random() * 0.2, // Drift upward
+    });
+  }
+
+  private tickDustParticles(): void {
+    for (let i = this.dustParticles.length - 1; i >= 0; i--) {
+      const p = this.dustParticles[i];
+      p.life--;
+      p.gfx.x += p.vx;
+      p.gfx.y += p.vy;
+      p.gfx.alpha = 0.3 * (p.life / p.maxLife);
+
+      if (p.life <= 0) {
+        if (p.gfx.parent) {
+          p.gfx.parent.removeChild(p.gfx);
+        }
+        p.gfx.destroy();
+        this.dustParticles.splice(i, 1);
+      }
+    }
+  }
+
   public destroy(): void {
+    // Clean up dust particles
+    for (const p of this.dustParticles) {
+      if (p.gfx.parent) {
+        p.gfx.parent.removeChild(p.gfx);
+      }
+      p.gfx.destroy();
+    }
+    this.dustParticles = [];
     this.container.destroy({ children: true });
   }
 

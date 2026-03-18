@@ -3,6 +3,7 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { ThemeMode } from "@/gateway/types";
 import { useOfficeStore } from "@/store/office-store";
+import { getLightingParams } from "@/lib/ambient-cycle";
 
 // ═══════════════════════════════════════════════════════════
 // Open playground 3D environment — no walls, clean space
@@ -31,24 +32,59 @@ function ThemeLighting({ theme }: { theme: ThemeMode }) {
   const fillRef = useRef<THREE.DirectionalLight>(null);
   const hemiRef = useRef<THREE.HemisphereLight>(null);
 
-  const target = theme === "light" ? LIGHT_PARAMS : DARK_PARAMS;
+  const baseTarget = theme === "light" ? LIGHT_PARAMS : DARK_PARAMS;
 
   useFrame((_, delta) => {
     const t = Math.min(delta * LERP_SPEED, 1);
+    
+    // Get ambient cycle lighting parameters
+    const cycleParams = getLightingParams();
+    
+    // Blend base theme with ambient cycle (cycle affects intensity/warmth)
+    const ambientIntensity = baseTarget.ambient.intensity * cycleParams.ambientIntensity * 1.5;
+    const mainIntensity = baseTarget.main.intensity * cycleParams.mainLightIntensity;
+    
+    // Apply warmth to colors
+    const warmthFactor = cycleParams.warmth;
+    const warmColor = new THREE.Color().setRGB(
+      cycleParams.mainLightColor.r,
+      cycleParams.mainLightColor.g,
+      cycleParams.mainLightColor.b
+    );
+    
     if (ambientRef.current) {
-      ambientRef.current.intensity = THREE.MathUtils.lerp(ambientRef.current.intensity, target.ambient.intensity, t);
-      ambientRef.current.color.lerp(target.ambient.color, t);
+      ambientRef.current.intensity = THREE.MathUtils.lerp(
+        ambientRef.current.intensity, 
+        ambientIntensity, 
+        t
+      );
+      // Blend towards warmer color based on time of day
+      const targetColor = baseTarget.ambient.color.clone().lerp(warmColor, warmthFactor * 0.3);
+      ambientRef.current.color.lerp(targetColor, t);
     }
     if (mainRef.current) {
-      mainRef.current.intensity = THREE.MathUtils.lerp(mainRef.current.intensity, target.main.intensity, t);
-      mainRef.current.color.lerp(target.main.color, t);
+      mainRef.current.intensity = THREE.MathUtils.lerp(
+        mainRef.current.intensity, 
+        mainIntensity, 
+        t
+      );
+      const targetColor = baseTarget.main.color.clone().lerp(warmColor, warmthFactor * 0.5);
+      mainRef.current.color.lerp(targetColor, t);
     }
     if (fillRef.current) {
-      fillRef.current.intensity = THREE.MathUtils.lerp(fillRef.current.intensity, target.fill.intensity, t);
-      fillRef.current.color.lerp(target.fill.color, t);
+      fillRef.current.intensity = THREE.MathUtils.lerp(
+        fillRef.current.intensity, 
+        baseTarget.fill.intensity * cycleParams.ambientIntensity, 
+        t
+      );
+      fillRef.current.color.lerp(baseTarget.fill.color, t);
     }
     if (hemiRef.current) {
-      hemiRef.current.intensity = THREE.MathUtils.lerp(hemiRef.current.intensity, target.hemi.intensity, t);
+      hemiRef.current.intensity = THREE.MathUtils.lerp(
+        hemiRef.current.intensity, 
+        baseTarget.hemi.intensity * cycleParams.ambientIntensity * 1.2, 
+        t
+      );
     }
   });
 
@@ -83,7 +119,7 @@ function ThemeLighting({ theme }: { theme: ThemeMode }) {
   );
 }
 
-/** Floating ambient particles */
+/** Floating ambient particles — density controlled by day/night cycle */
 function AmbientParticles({ theme }: { theme: ThemeMode }) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = 100;
@@ -103,6 +139,11 @@ function AmbientParticles({ theme }: { theme: ThemeMode }) {
   useFrame((state) => {
     if (!pointsRef.current) return;
     const t = state.clock.elapsedTime;
+    
+    // Get particle density from ambient cycle
+    const cycleParams = getLightingParams();
+    const particleDensity = cycleParams.particleDensity;
+    
     const posAttr = pointsRef.current.geometry.getAttribute("position");
     for (let i = 0; i < count; i++) {
       const baseY = 0.3 + ((i * 3) / count) * 2.5;
@@ -110,8 +151,20 @@ function AmbientParticles({ theme }: { theme: ThemeMode }) {
       (posAttr.array as Float32Array)[i * 3] += Math.sin(t * 0.08 + i * 0.5) * 0.001;
     }
     posAttr.needsUpdate = true;
+    
+    // Adjust opacity based on day/night cycle
     const mat = pointsRef.current.material as THREE.PointsMaterial;
-    mat.opacity = 0.35 + Math.sin(t * 0.5) * 0.1;
+    const baseOpacity = 0.35 + Math.sin(t * 0.5) * 0.1;
+    mat.opacity = baseOpacity * particleDensity;
+    
+    // Warmer color at night
+    const warmth = cycleParams.warmth;
+    if (theme === "dark") {
+      const r = 1.0;
+      const g = 0.84 + warmth * 0.1;
+      const b = 0.0 + (1 - warmth) * 0.3;
+      mat.color.setRGB(r, g, b);
+    }
   });
 
   const particleColor = theme === "dark" ? "#ffd700" : "#c0c8d8";
@@ -188,8 +241,12 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
       <ThemeLighting theme={theme} />
       <ActivityAmbientLight />
 
-      {/* Subtle distance fog */}
-      <fog attach="fog" args={[isDark ? "#0d0d1a" : "#e8ecf2", 20, 60]} />
+      {/* Atmospheric fog — exponential in dark mode for depth falloff */}
+      {isDark ? (
+        <fogExp2 attach="fog" args={["#0f1729", 0.015]} />
+      ) : (
+        <fog attach="fog" args={["#e8ecf2", 20, 60]} />
+      )}
 
       {/* Ambient particles */}
       <AmbientParticles theme={theme} />

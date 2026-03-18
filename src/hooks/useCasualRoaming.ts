@@ -3,9 +3,11 @@ import { useOfficeStore } from "@/store/office-store";
 import {
   createActivityState,
   tickActivities,
+  setActivityMultiplier,
   type ActivityState,
   type ActivityTickResult,
 } from "@/lib/office-activities";
+import { getActivityMultiplier as getAmbientActivityMultiplier } from "@/lib/ambient-cycle";
 
 const TICK_INTERVAL_MS = 4_000;
 
@@ -39,6 +41,10 @@ export function useCasualRoaming() {
     const interval = setInterval(() => {
       const store = useOfficeStore.getState();
       const agents = store.agents;
+
+      // Update activity multiplier from ambient cycle
+      const ambientMultiplier = getAmbientActivityMultiplier();
+      setActivityMultiplier(actState, ambientMultiplier);
 
       const dt = TICK_INTERVAL_MS / 1000;
       const result = tickActivities(actState, agents, dt);
