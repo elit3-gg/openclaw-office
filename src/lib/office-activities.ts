@@ -2,12 +2,18 @@
  * Smart office activity system — agents do realistic office things.
  *
  * Activities (with priorities):
- * - coffeeRun:     Walk to lounge coffee area, pause, return
- * - couchBreak:    Go sit on couch, relax, return
- * - waterCooler:   Stand at water cooler, chat with nearby agent
- * - meeting:       2-4 agents gather at meeting table, face each other, take turns "talking"
- * - pairChat:      Two agents walk to each other, face each other, chat briefly
- * - deskWork:      Return to desk, type/think (default idle)
+ * - coffeeRun:       Walk to lounge coffee area, pause, return
+ * - couchBreak:      Go sit on couch, relax, return
+ * - waterCooler:     Stand at water cooler, chat with nearby agent
+ * - meeting:         2-4 agents gather at meeting table, face each other, take turns "talking"
+ * - pairChat:        Two agents walk to each other, face each other, chat briefly
+ * - deskWork:        Return to desk, type/think (default idle)
+ * - phoneCalling:    Walk to quiet corner, face away, "talk" on phone
+ * - whiteboarding:   2-3 agents go to whiteboard zone, one "draws" while others watch
+ * - lunchBreak:      Agent leaves the office (walks to edge, fades out), returns after a while
+ * - stretching:      Agent stands up at desk, does stretching animation
+ * - presentationMode: One agent at whiteboard, all others gather to watch
+ * - codeReview:      Two agents stand at one desk together, both face the "monitor"
  *
  * Agents take turns, face interaction partners, and don't all move at once.
  */
@@ -23,7 +29,13 @@ export type ActivityType =
   | "couchBreak"
   | "waterCooler"
   | "meeting"
-  | "pairChat";
+  | "pairChat"
+  | "phoneCalling"
+  | "whiteboarding"
+  | "lunchBreak"
+  | "stretching"
+  | "presentationMode"
+  | "codeReview";
 
 export interface Activity {
   type: ActivityType;
@@ -35,43 +47,87 @@ export interface Activity {
   speakingAgent: string | null;        // Who is currently "talking" in a meeting
   speakTurnTimer: number;              // Time until next speaker switch
   returnPositions: Map<string, { x: number; y: number; zone: AgentZone }>;
+  currentDialogue: string | null;      // Current dialogue message for speaking agent
+  dialogueTimer: number;               // Timer to rotate dialogues
+  previousActivity: ActivityType | null; // For activity chaining
 }
 
-export type ActivityPhase = "traveling" | "arrived" | "interacting" | "returning";
+export type ActivityPhase = "traveling" | "arrived" | "interacting" | "returning" | "away";
 
 export interface ActivityState {
   activities: Map<string, Activity>;  // activity ID → Activity
   agentActivity: Map<string, string>; // agentId → activity ID
   cooldowns: Map<string, number>;     // agentId → timestamp when available
   meetingCooldown: number;            // Global meeting cooldown timestamp
+  presentationCooldown: number;       // Global presentation cooldown timestamp
   lastTick: number;
+  activityMultiplier: number;         // Controlled by day/night cycle
 }
 
 // ── Constants ──
 
-const MAX_CONCURRENT_ACTIVITIES = 4;
-const AGENT_COOLDOWN_MS = 15_000;
-const MEETING_COOLDOWN_MS = 30_000;
+const MAX_CONCURRENT_ACTIVITIES = 6;
+const AGENT_COOLDOWN_MS = 12_000;
+const MEETING_COOLDOWN_MS = 45_000;
+const PRESENTATION_COOLDOWN_MS = 60_000;
 const SPEAK_TURN_DURATION: [number, number] = [2, 5]; // seconds per speaker turn
+const DIALOGUE_ROTATE_TIME = 3; // seconds between dialogue changes
 
 // Activity weights (probability of being chosen)
 const ACTIVITY_WEIGHTS: Record<ActivityType, number> = {
-  deskWork: 0,      // Not randomly triggered — it's the default
-  coffeeRun: 25,
-  couchBreak: 20,
-  waterCooler: 15,
-  meeting: 15,
-  pairChat: 25,
+  deskWork: 0,          // Not randomly triggered — it's the default
+  coffeeRun: 20,
+  couchBreak: 15,
+  waterCooler: 12,
+  meeting: 12,
+  pairChat: 18,
+  phoneCalling: 8,
+  whiteboarding: 10,
+  lunchBreak: 5,
+  stretching: 10,
+  presentationMode: 6,
+  codeReview: 12,
+};
+
+// Activity chaining probabilities (after activity X, might do Y)
+const ACTIVITY_CHAINS: Partial<Record<ActivityType, { next: ActivityType; chance: number }[]>> = {
+  coffeeRun: [
+    { next: "pairChat", chance: 0.3 },
+    { next: "couchBreak", chance: 0.2 },
+  ],
+  meeting: [
+    { next: "coffeeRun", chance: 0.25 },
+    { next: "couchBreak", chance: 0.2 },
+    { next: "stretching", chance: 0.15 },
+  ],
+  presentationMode: [
+    { next: "coffeeRun", chance: 0.3 },
+    { next: "pairChat", chance: 0.2 },
+  ],
+  codeReview: [
+    { next: "coffeeRun", chance: 0.25 },
+    { next: "stretching", chance: 0.2 },
+  ],
+  whiteboarding: [
+    { next: "coffeeRun", chance: 0.2 },
+    { next: "pairChat", chance: 0.15 },
+  ],
 };
 
 // Phase durations in seconds
 const PHASE_DURATIONS: Record<ActivityType, Record<string, [number, number]>> = {
-  deskWork:     { arrived: [999, 999] },
-  coffeeRun:    { traveling: [3, 5], arrived: [4, 8], returning: [3, 5] },
-  couchBreak:   { traveling: [3, 5], arrived: [8, 15], returning: [3, 5] },
-  waterCooler:  { traveling: [3, 5], interacting: [5, 10], returning: [3, 5] },
-  meeting:      { traveling: [3, 5], interacting: [10, 20], returning: [3, 5] },
-  pairChat:     { traveling: [2, 4], interacting: [5, 10], returning: [2, 4] },
+  deskWork:         { arrived: [999, 999] },
+  coffeeRun:        { traveling: [3, 5], arrived: [4, 8], returning: [3, 5] },
+  couchBreak:       { traveling: [3, 5], arrived: [8, 15], returning: [3, 5] },
+  waterCooler:      { traveling: [3, 5], interacting: [5, 10], returning: [3, 5] },
+  meeting:          { traveling: [3, 5], interacting: [12, 25], returning: [3, 5] },
+  pairChat:         { traveling: [2, 4], interacting: [5, 10], returning: [2, 4] },
+  phoneCalling:     { traveling: [2, 4], interacting: [8, 15], returning: [2, 4] },
+  whiteboarding:    { traveling: [3, 5], interacting: [10, 20], returning: [3, 5] },
+  lunchBreak:       { traveling: [3, 5], away: [15, 30], returning: [3, 5] },
+  stretching:       { arrived: [5, 10] },
+  presentationMode: { traveling: [3, 5], interacting: [15, 30], returning: [3, 5] },
+  codeReview:       { traveling: [2, 4], interacting: [8, 15], returning: [2, 4] },
 };
 
 // ── Points of interest in the office ──
@@ -96,6 +152,22 @@ const MEETING_TABLE_CENTER = {
   y: ZONES.meeting.y + ZONES.meeting.height / 2,
 };
 
+const WHITEBOARD_POSITION = {
+  x: ZONES.meeting.x + ZONES.meeting.width - 60,
+  y: ZONES.meeting.y + 80,
+};
+
+const PHONE_CORNERS = [
+  { x: ZONES.desk.x + 20, y: ZONES.desk.y + ZONES.desk.height - 30 },
+  { x: ZONES.hotDesk.x + ZONES.hotDesk.width - 30, y: ZONES.hotDesk.y + 30 },
+  { x: ZONES.lounge.x + 30, y: ZONES.lounge.y + ZONES.lounge.height - 30 },
+];
+
+const EXIT_POSITION = {
+  x: ZONES.lounge.x + ZONES.lounge.width / 2,
+  y: ZONES.lounge.y + ZONES.lounge.height + 50,
+};
+
 // ── Helpers ──
 
 function randomRange(min: number, max: number): number {
@@ -111,12 +183,12 @@ function newActivityId(): string {
   return `act_${++activityCounter}_${Date.now()}`;
 }
 
-function weightedPick(): ActivityType {
+function weightedPick(multiplier: number = 1): ActivityType {
   const entries = Object.entries(ACTIVITY_WEIGHTS).filter(([, w]) => w > 0) as [ActivityType, number][];
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
   let r = Math.random() * total;
   for (const [type, weight] of entries) {
-    r -= weight;
+    r -= weight * multiplier;
     if (r <= 0) return type;
   }
   return "coffeeRun";
@@ -135,6 +207,53 @@ function getMeetingPositions(count: number): { x: number; y: number }[] {
   return positions;
 }
 
+function getWhiteboardPositions(count: number, presenterIdx: number = 0): { x: number; y: number }[] {
+  const positions: { x: number; y: number }[] = [];
+  // Presenter stands at whiteboard
+  positions.push({ x: WHITEBOARD_POSITION.x, y: WHITEBOARD_POSITION.y });
+  
+  // Watchers form a semicircle facing the whiteboard
+  const watcherCount = count - 1;
+  for (let i = 0; i < watcherCount; i++) {
+    const angle = Math.PI * 0.3 + (Math.PI * 0.4 * i) / Math.max(watcherCount - 1, 1);
+    const r = 70 + Math.random() * 20;
+    positions.push({
+      x: WHITEBOARD_POSITION.x - Math.cos(angle) * r,
+      y: WHITEBOARD_POSITION.y + Math.sin(angle) * r - 30,
+    });
+  }
+  
+  // Swap presenter position if needed
+  if (presenterIdx > 0 && presenterIdx < positions.length) {
+    [positions[0], positions[presenterIdx]] = [positions[presenterIdx], positions[0]];
+  }
+  
+  return positions;
+}
+
+function getPresentationPositions(count: number): { x: number; y: number }[] {
+  // Similar to whiteboarding but with more formal seating
+  const positions: { x: number; y: number }[] = [];
+  // Presenter at whiteboard
+  positions.push({ x: WHITEBOARD_POSITION.x, y: WHITEBOARD_POSITION.y });
+  
+  // Audience in rows
+  const audienceCount = count - 1;
+  const rows = Math.ceil(audienceCount / 3);
+  let idx = 0;
+  for (let row = 0; row < rows && idx < audienceCount; row++) {
+    const colsInRow = Math.min(3, audienceCount - idx);
+    for (let col = 0; col < colsInRow; col++) {
+      positions.push({
+        x: MEETING_TABLE_CENTER.x - 60 + col * 40,
+        y: MEETING_TABLE_CENTER.y - 20 + row * 35,
+      });
+      idx++;
+    }
+  }
+  return positions;
+}
+
 function getChatPositions(agentA: VisualAgent, agentB: VisualAgent): [{ x: number; y: number }, { x: number; y: number }] {
   // Meet halfway between them, offset slightly
   const midX = (agentA.position.x + agentB.position.x) / 2;
@@ -146,6 +265,22 @@ function getChatPositions(agentA: VisualAgent, agentB: VisualAgent): [{ x: numbe
   ];
 }
 
+function getCodeReviewPositions(targetAgent: VisualAgent): [{ x: number; y: number }, { x: number; y: number }] {
+  // Both agents at target agent's desk
+  return [
+    { x: targetAgent.position.x - 20, y: targetAgent.position.y },
+    { x: targetAgent.position.x + 20, y: targetAgent.position.y },
+  ];
+}
+
+function getStretchingPosition(agent: VisualAgent): { x: number; y: number } {
+  // Stand up near current position
+  return {
+    x: agent.position.x + randomRange(-10, 10),
+    y: agent.position.y + randomRange(-5, 5),
+  };
+}
+
 // ── Core ──
 
 export function createActivityState(): ActivityState {
@@ -154,7 +289,9 @@ export function createActivityState(): ActivityState {
     agentActivity: new Map(),
     cooldowns: new Map(),
     meetingCooldown: 0,
+    presentationCooldown: 0,
     lastTick: Date.now(),
+    activityMultiplier: 1.0,
   };
 }
 
@@ -179,6 +316,7 @@ function startActivity(
   type: ActivityType,
   participants: VisualAgent[],
   _agents: Map<string, VisualAgent>,
+  previousActivity: ActivityType | null = null,
 ): { commands: MoveCommand[] } | null {
   const commands: MoveCommand[] = [];
   const activity: Activity = {
@@ -191,6 +329,9 @@ function startActivity(
     speakingAgent: null,
     speakTurnTimer: 0,
     returnPositions: new Map(),
+    currentDialogue: null,
+    dialogueTimer: 0,
+    previousActivity,
   };
 
   // Save return positions
@@ -224,6 +365,8 @@ function startActivity(
         activity.facingTargets.set(participants[0].id, participants[1].id);
         activity.facingTargets.set(participants[1].id, participants[0].id);
       }
+      activity.speakingAgent = participants[0].id;
+      activity.speakTurnTimer = randomRange(...SPEAK_TURN_DURATION);
       break;
     }
     case "meeting": {
@@ -232,7 +375,6 @@ function startActivity(
         activity.targetPositions.set(participants[i].id, { ...positions[i], zone: "meeting" });
         commands.push({ agentId: participants[i].id, toZone: "meeting", targetPos: positions[i] });
       }
-      // Everyone faces center (speaker will be set in interaction phase)
       activity.speakingAgent = participants[0].id;
       activity.speakTurnTimer = randomRange(...SPEAK_TURN_DURATION);
       // Set facing — each faces the next in circle
@@ -244,7 +386,6 @@ function startActivity(
     }
     case "pairChat": {
       const [posA, posB] = getChatPositions(participants[0], participants[1]);
-      // Meet in the zone of the agent closest to center
       const zone: AgentZone = "desk";
       activity.targetPositions.set(participants[0].id, { ...posA, zone });
       activity.targetPositions.set(participants[1].id, { ...posB, zone });
@@ -253,6 +394,67 @@ function startActivity(
       // Face each other
       activity.facingTargets.set(participants[0].id, participants[1].id);
       activity.facingTargets.set(participants[1].id, participants[0].id);
+      activity.speakingAgent = participants[0].id;
+      activity.speakTurnTimer = randomRange(...SPEAK_TURN_DURATION);
+      break;
+    }
+    case "phoneCalling": {
+      const corner = randomPick(PHONE_CORNERS);
+      const zone: AgentZone = corner.x < ZONES.meeting.x ? (corner.y < ZONES.hotDesk.y ? "desk" : "hotDesk") : "lounge";
+      activity.targetPositions.set(participants[0].id, { ...corner, zone });
+      commands.push({ agentId: participants[0].id, toZone: zone, targetPos: corner });
+      activity.speakingAgent = participants[0].id;
+      break;
+    }
+    case "whiteboarding": {
+      const positions = getWhiteboardPositions(participants.length);
+      for (let i = 0; i < participants.length; i++) {
+        activity.targetPositions.set(participants[i].id, { ...positions[i], zone: "meeting" });
+        commands.push({ agentId: participants[i].id, toZone: "meeting", targetPos: positions[i] });
+      }
+      activity.speakingAgent = participants[0].id; // First is the "drawer"
+      activity.speakTurnTimer = randomRange(5, 10);
+      // All face the whiteboard (first participant)
+      for (let i = 1; i < participants.length; i++) {
+        activity.facingTargets.set(participants[i].id, participants[0].id);
+      }
+      break;
+    }
+    case "lunchBreak": {
+      activity.targetPositions.set(participants[0].id, { ...EXIT_POSITION, zone: "lounge" });
+      commands.push({ agentId: participants[0].id, toZone: "lounge", targetPos: EXIT_POSITION });
+      break;
+    }
+    case "stretching": {
+      const pos = getStretchingPosition(participants[0]);
+      const zone = participants[0].zone as AgentZone;
+      activity.targetPositions.set(participants[0].id, { ...pos, zone });
+      activity.phase = "arrived"; // Stretching doesn't need travel
+      activity.phaseTimer = randomRange(...(PHASE_DURATIONS.stretching.arrived ?? [5, 10]));
+      break;
+    }
+    case "presentationMode": {
+      const positions = getPresentationPositions(participants.length);
+      for (let i = 0; i < participants.length; i++) {
+        activity.targetPositions.set(participants[i].id, { ...positions[i], zone: "meeting" });
+        commands.push({ agentId: participants[i].id, toZone: "meeting", targetPos: positions[i] });
+      }
+      activity.speakingAgent = participants[0].id; // Presenter
+      activity.speakTurnTimer = randomRange(8, 15);
+      // All face the presenter
+      for (let i = 1; i < participants.length; i++) {
+        activity.facingTargets.set(participants[i].id, participants[0].id);
+      }
+      break;
+    }
+    case "codeReview": {
+      const [posA, posB] = getCodeReviewPositions(participants[0]);
+      const zone = participants[0].zone as AgentZone;
+      activity.targetPositions.set(participants[0].id, { ...posA, zone });
+      activity.targetPositions.set(participants[1].id, { ...posB, zone });
+      commands.push({ agentId: participants[0].id, toZone: zone, targetPos: posA });
+      commands.push({ agentId: participants[1].id, toZone: zone, targetPos: posB });
+      // Both face forward (the "monitor")
       activity.speakingAgent = participants[0].id;
       activity.speakTurnTimer = randomRange(...SPEAK_TURN_DURATION);
       break;
@@ -280,6 +482,12 @@ export interface ActivityTickResult {
   speakingAgents: Set<string>;            // Agents currently "speaking" in interactions
   sittingAgents: Set<string>;             // Agents on couches
   drinkingAgents: Set<string>;            // Agents at coffee
+  phoneAgents: Set<string>;               // Agents on phone
+  whiteboardingAgents: Set<string>;       // Agents at whiteboard
+  stretchingAgents: Set<string>;          // Agents stretching
+  presentingAgents: Set<string>;          // Agents presenting
+  reviewingAgents: Set<string>;           // Agents reviewing code
+  awayAgents: Set<string>;                // Agents on lunch break
 }
 
 /**
@@ -299,6 +507,12 @@ export function tickActivities(
     speakingAgents: new Set(),
     sittingAgents: new Set(),
     drinkingAgents: new Set(),
+    phoneAgents: new Set(),
+    whiteboardingAgents: new Set(),
+    stretchingAgents: new Set(),
+    presentingAgents: new Set(),
+    reviewingAgents: new Set(),
+    awayAgents: new Set(),
   };
 
   // ── Update existing activities ──
@@ -306,6 +520,7 @@ export function tickActivities(
 
   for (const [actId, act] of state.activities) {
     act.phaseTimer -= dt;
+    act.dialogueTimer -= dt;
 
     // Collect state for rendering
     if (act.phase === "interacting" || act.phase === "arrived") {
@@ -314,8 +529,14 @@ export function tickActivities(
         result.facingUpdates.set(agentId, targetId);
       }
 
+      // Rotate dialogue if timer expired
+      if (act.dialogueTimer <= 0 && act.speakingAgent) {
+        act.dialogueTimer = DIALOGUE_ROTATE_TIME;
+      }
+
       // Meeting/chat speaker rotation
-      if ((act.type === "meeting" || act.type === "pairChat" || act.type === "waterCooler") && act.speakingAgent) {
+      if ((act.type === "meeting" || act.type === "pairChat" || act.type === "waterCooler" || 
+           act.type === "whiteboarding" || act.type === "codeReview") && act.speakingAgent) {
         result.speakingAgents.add(act.speakingAgent);
         act.speakTurnTimer -= dt;
         if (act.speakTurnTimer <= 0) {
@@ -324,6 +545,7 @@ export function tickActivities(
           const nextIdx = (currentIdx + 1) % act.participants.length;
           act.speakingAgent = act.participants[nextIdx];
           act.speakTurnTimer = randomRange(...SPEAK_TURN_DURATION);
+          act.dialogueTimer = 0; // Trigger new dialogue
           // Update facing — everyone looks at speaker
           for (const pid of act.participants) {
             if (pid !== act.speakingAgent) {
@@ -340,20 +562,48 @@ export function tickActivities(
       if (act.type === "coffeeRun") {
         for (const pid of act.participants) result.drinkingAgents.add(pid);
       }
+      if (act.type === "phoneCalling") {
+        for (const pid of act.participants) result.phoneAgents.add(pid);
+      }
+      if (act.type === "whiteboarding") {
+        for (const pid of act.participants) result.whiteboardingAgents.add(pid);
+      }
+      if (act.type === "stretching") {
+        for (const pid of act.participants) result.stretchingAgents.add(pid);
+      }
+      if (act.type === "presentationMode") {
+        if (act.speakingAgent) result.presentingAgents.add(act.speakingAgent);
+      }
+      if (act.type === "codeReview") {
+        for (const pid of act.participants) result.reviewingAgents.add(pid);
+      }
+    }
+
+    // Track away agents during lunch break
+    if (act.type === "lunchBreak" && act.phase === "away") {
+      for (const pid of act.participants) result.awayAgents.add(pid);
     }
 
     // Phase transitions
     if (act.phaseTimer <= 0) {
       switch (act.phase) {
         case "traveling": {
-          const nextPhase = act.type === "coffeeRun" || act.type === "couchBreak" ? "arrived" : "interacting";
+          let nextPhase: ActivityPhase;
+          if (act.type === "coffeeRun" || act.type === "couchBreak") {
+            nextPhase = "arrived";
+          } else if (act.type === "lunchBreak") {
+            nextPhase = "away";
+          } else {
+            nextPhase = "interacting";
+          }
           act.phase = nextPhase;
           const durations = PHASE_DURATIONS[act.type][nextPhase];
           act.phaseTimer = durations ? randomRange(...durations) : 5;
           break;
         }
         case "arrived":
-        case "interacting": {
+        case "interacting":
+        case "away": {
           act.phase = "returning";
           const durations = PHASE_DURATIONS[act.type].returning;
           act.phaseTimer = durations ? randomRange(...durations) : 3;
@@ -367,6 +617,28 @@ export function tickActivities(
           break;
         }
         case "returning": {
+          // Check for activity chaining
+          const chains = ACTIVITY_CHAINS[act.type];
+          let chainedActivity: ActivityType | null = null;
+          if (chains) {
+            for (const chain of chains) {
+              if (Math.random() < chain.chance) {
+                chainedActivity = chain.next;
+                break;
+              }
+            }
+          }
+          
+          // Store for potential chaining
+          for (const pid of act.participants) {
+            if (chainedActivity) {
+              // Give a short cooldown to allow chaining
+              state.cooldowns.set(pid, now + 2000);
+            } else {
+              state.cooldowns.set(pid, now + AGENT_COOLDOWN_MS);
+            }
+          }
+          
           toRemove.push(actId);
           break;
         }
@@ -380,7 +652,6 @@ export function tickActivities(
     if (act) {
       for (const pid of act.participants) {
         state.agentActivity.delete(pid);
-        state.cooldowns.set(pid, now + AGENT_COOLDOWN_MS);
       }
       state.activities.delete(actId);
     }
@@ -407,23 +678,37 @@ export function tickActivities(
 
   // ── Start new activities ──
   const activeCount = state.activities.size;
-  if (activeCount < MAX_CONCURRENT_ACTIVITIES) {
+  const effectiveMax = Math.floor(MAX_CONCURRENT_ACTIVITIES * state.activityMultiplier);
+  
+  if (activeCount < effectiveMax && Math.random() < state.activityMultiplier) {
     const eligible = getEligibleAgents(state, agents, now);
     if (eligible.length >= 1) {
-      const type = weightedPick();
+      const type = weightedPick(state.activityMultiplier);
       let participants: VisualAgent[] = [];
 
       switch (type) {
         case "coffeeRun":
         case "couchBreak":
+        case "phoneCalling":
+        case "lunchBreak":
+        case "stretching":
           participants = [randomPick(eligible)];
           break;
         case "waterCooler":
+        case "pairChat":
+        case "codeReview":
           if (eligible.length >= 2) {
             const a = randomPick(eligible);
             const remaining = eligible.filter((e) => e.id !== a.id);
             const b = randomPick(remaining);
             participants = [a, b];
+          }
+          break;
+        case "whiteboarding":
+          if (eligible.length >= 2) {
+            const count = Math.min(eligible.length, 2 + Math.floor(Math.random() * 2)); // 2-3
+            const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+            participants = shuffled.slice(0, count);
           }
           break;
         case "meeting":
@@ -434,12 +719,12 @@ export function tickActivities(
             state.meetingCooldown = now + MEETING_COOLDOWN_MS;
           }
           break;
-        case "pairChat":
-          if (eligible.length >= 2) {
-            const a = randomPick(eligible);
-            const remaining = eligible.filter((e) => e.id !== a.id);
-            const b = randomPick(remaining);
-            participants = [a, b];
+        case "presentationMode":
+          if (eligible.length >= 4 && now > state.presentationCooldown) {
+            const count = Math.min(eligible.length, 4 + Math.floor(Math.random() * 3)); // 4-6
+            const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+            participants = shuffled.slice(0, count);
+            state.presentationCooldown = now + PRESENTATION_COOLDOWN_MS;
           }
           break;
       }
@@ -454,6 +739,13 @@ export function tickActivities(
   }
 
   return result;
+}
+
+/**
+ * Set the activity multiplier (controlled by day/night cycle)
+ */
+export function setActivityMultiplier(state: ActivityState, multiplier: number): void {
+  state.activityMultiplier = Math.max(0, Math.min(2, multiplier));
 }
 
 /**
@@ -472,7 +764,7 @@ export function getAgentFacingTarget(state: ActivityState, agentId: string): str
  */
 export function isAgentSpeaking(state: ActivityState, agentId: string): boolean {
   const actId = state.agentActivity.get(agentId);
-  if (!actId) return null as unknown as boolean;
+  if (!actId) return false;
   const act = state.activities.get(actId);
   if (!act) return false;
   return act.speakingAgent === agentId;
@@ -486,4 +778,14 @@ export function getAgentActivityType(state: ActivityState, agentId: string): Act
   if (!actId) return null;
   const act = state.activities.get(actId);
   return act?.type ?? null;
+}
+
+/**
+ * Get current activity phase for an agent.
+ */
+export function getAgentActivityPhase(state: ActivityState, agentId: string): ActivityPhase | null {
+  const actId = state.agentActivity.get(agentId);
+  if (!actId) return null;
+  const act = state.activities.get(actId);
+  return act?.phase ?? null;
 }
