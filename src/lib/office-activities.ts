@@ -19,6 +19,7 @@
  */
 
 import type { VisualAgent, AgentZone } from "@/gateway/types";
+// Note: VisualAgent is already imported above
 import { ZONES } from "./constants";
 import { getDialogueForActivity, shouldShowDialogue, getDialogueProbability } from "./agent-dialogue";
 
@@ -794,8 +795,14 @@ export function getAgentActivityPhase(state: ActivityState, agentId: string): Ac
 /**
  * Get current dialogue for an agent during activity.
  * Returns null if agent is not in an interactive activity phase.
+ * Pass agents map for role-aware dialogue generation.
  */
-export function getAgentDialogue(state: ActivityState, agentId: string, dt: number = 0): string | null {
+export function getAgentDialogue(
+  state: ActivityState, 
+  agentId: string, 
+  dt: number = 0,
+  agents?: Map<string, VisualAgent>,
+): string | null {
   const actId = state.agentActivity.get(agentId);
   if (!actId) return null;
   
@@ -811,12 +818,23 @@ export function getAgentDialogue(state: ActivityState, agentId: string, dt: numb
   
   if (!isSpeaker && !isSoloActivity) return null;
   
+  // Get agent objects for role-aware dialogue
+  const agent = agents?.get(agentId);
+  let partnerAgent: VisualAgent | undefined;
+  
+  if (act.participants.length === 2) {
+    const partnerId = act.participants.find(p => p !== agentId);
+    if (partnerId) {
+      partnerAgent = agents?.get(partnerId);
+    }
+  }
+  
   // Check if it's time for a new dialogue
   if (shouldShowDialogue(agentId, dt)) {
     // Use probability to decide if we should actually show dialogue
     const prob = getDialogueProbability(act.type);
     if (Math.random() < prob) {
-      act.currentDialogue = getDialogueForActivity(act.type, actId);
+      act.currentDialogue = getDialogueForActivity(act.type, actId, agent, partnerAgent);
     }
   }
   
@@ -826,12 +844,26 @@ export function getAgentDialogue(state: ActivityState, agentId: string, dt: numb
 /**
  * Force a new dialogue for an agent (called when speaker changes).
  */
-export function rotateAgentDialogue(state: ActivityState, agentId: string): void {
+export function rotateAgentDialogue(
+  state: ActivityState, 
+  agentId: string,
+  agents?: Map<string, VisualAgent>,
+): void {
   const actId = state.agentActivity.get(agentId);
   if (!actId) return;
   
   const act = state.activities.get(actId);
   if (!act) return;
   
-  act.currentDialogue = getDialogueForActivity(act.type, actId);
+  const agent = agents?.get(agentId);
+  let partnerAgent: VisualAgent | undefined;
+  
+  if (act.participants.length === 2) {
+    const partnerId = act.participants.find(p => p !== agentId);
+    if (partnerId) {
+      partnerAgent = agents?.get(partnerId);
+    }
+  }
+  
+  act.currentDialogue = getDialogueForActivity(act.type, actId, agent, partnerAgent);
 }
