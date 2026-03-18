@@ -155,8 +155,8 @@ export function SpriteCharacter({
     );
   });
 
-  // Character height in 3D world units
-  const charHeight = 0.6 * scale;
+  // Character height in 3D world units — big prominent characters
+  const charHeight = 1.4 * scale;
 
   return (
     <sprite

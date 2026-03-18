@@ -8,6 +8,8 @@ import type { Group, Mesh } from "three";
 import type { VisualAgent } from "@/gateway/types";
 import { position2dTo3d } from "@/lib/position-allocator";
 import { useOfficeStore } from "@/store/office-store";
+import { getActivityState, getLastTickResult } from "@/hooks/useCasualRoaming";
+import { getAgentFacingTarget, getAgentActivityType } from "@/lib/office-activities";
 import { ErrorIndicator } from "./ErrorIndicator";
 import { SkillHologram } from "./SkillHologram";
 import { SpriteCharacter } from "./SpriteCharacter";
@@ -177,6 +179,53 @@ function SpeechBubbleOverlay({ text }: { text: string }) {
   );
 }
 
+/** Shows a small chat/activity indicator when agents interact */
+function InteractionBubble({ agentId }: { agentId: string }) {
+  const actState = getActivityState();
+  const tickResult = getLastTickResult();
+  if (!actState || !tickResult) return null;
+
+  const actType = getAgentActivityType(actState, agentId);
+  if (!actType) return null;
+
+  const isSpeaking = tickResult.speakingAgents.has(agentId);
+  const isSitting = tickResult.sittingAgents.has(agentId);
+  const isDrinking = tickResult.drinkingAgents.has(agentId);
+
+  let icon = "";
+  let bg = "bg-gray-600/80";
+
+  if (isSpeaking) {
+    icon = "💬";
+    bg = "bg-purple-500/90";
+  } else if (isDrinking) {
+    icon = "☕";
+    bg = "bg-amber-600/90";
+  } else if (isSitting) {
+    icon = "🛋️";
+    bg = "bg-indigo-500/90";
+  } else if (actType === "meeting") {
+    icon = "📋";
+    bg = "bg-blue-500/80";
+  } else if (actType === "waterCooler") {
+    icon = "🚰";
+    bg = "bg-cyan-500/80";
+  } else {
+    return null;
+  }
+
+  return (
+    <Html position={[0, 1.6, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+      <div
+        className={`flex h-6 w-6 items-center justify-center rounded-full ${bg} text-[12px] shadow-lg`}
+        style={{ animation: isSpeaking ? "pulse 1.5s ease-in-out infinite" : undefined }}
+      >
+        {icon}
+      </div>
+    </Html>
+  );
+}
+
 export function AgentCharacter({ agent }: AgentCharacterProps) {
   const { t } = useTranslation("common");
   const groupRef = useRef<Group>(null);
@@ -274,8 +323,26 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       pos.x += dx * lerpFactor;
       pos.z += dz * lerpFactor;
 
-      // Reset movement direction when idle
-      moveDirRef.current = null;
+      // Check if agent should face another agent (interaction)
+      const actState = getActivityState();
+      if (actState) {
+        const facingTargetId = getAgentFacingTarget(actState, agent.id);
+        if (facingTargetId) {
+          const targetAgent = useOfficeStore.getState().agents.get(facingTargetId);
+          if (targetAgent) {
+            const [tx, , tz] = position2dTo3d(targetAgent.position);
+            const dx = tx - groupRef.current.position.x;
+            const dz = tz - groupRef.current.position.z;
+            if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+              moveDirRef.current = { dx, dz };
+            }
+          }
+        } else {
+          moveDirRef.current = null;
+        }
+      } else {
+        moveDirRef.current = null;
+      }
 
       // Idle breathing
       if (bodyRef.current) {
@@ -369,6 +436,9 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       {agent.status === "speaking" && agent.speechBubble && (
         <SpeechBubbleOverlay text={agent.speechBubble.text ?? ""} />
       )}
+
+      {/* Interaction chat bubble — agent is "speaking" during a meeting/chat activity */}
+      {agent.status === "idle" && <InteractionBubble agentId={agent.id} />}
 
       {/* Selection ring — bright pulsing ring on ground */}
       {isSelected && (

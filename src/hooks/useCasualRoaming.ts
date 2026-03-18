@@ -1,57 +1,63 @@
 import { useEffect, useRef } from "react";
 import { useOfficeStore } from "@/store/office-store";
-import { createRoamingState, tickRoaming, cancelRoaming, type RoamingState } from "@/lib/casual-roaming";
+import {
+  createActivityState,
+  tickActivities,
+  type ActivityState,
+  type ActivityTickResult,
+} from "@/lib/office-activities";
 
-const TICK_INTERVAL_MS = 5_000;
+const TICK_INTERVAL_MS = 4_000;
+
+// Shared activity state — accessible by rendering components
+let sharedActivityState: ActivityState | null = null;
+let lastTickResult: ActivityTickResult | null = null;
+
+export function getActivityState(): ActivityState | null {
+  return sharedActivityState;
+}
+
+export function getLastTickResult(): ActivityTickResult | null {
+  return lastTickResult;
+}
 
 /**
- * Hook that drives casual roaming behavior for agents.
- * Agents periodically get up, walk around, visit colleagues, get coffee, etc.
+ * Hook that drives smart office activities for agents.
+ * Agents take coffee breaks, sit on couches, have meetings, pair-chat, etc.
  */
 export function useCasualRoaming() {
   const connectionStatus = useOfficeStore((s) => s.connectionStatus);
-  const stateRef = useRef<RoamingState | null>(null);
+  const stateRef = useRef<ActivityState | null>(null);
 
   useEffect(() => {
     if (connectionStatus !== "connected") return;
 
-    const roamState = createRoamingState();
-    stateRef.current = roamState;
-
-    // Set up return callback
-    roamState.onReturn = (agentId, zone, pos) => {
-      const store = useOfficeStore.getState();
-      const agent = store.agents.get(agentId);
-      if (agent && agent.status === "idle" && !agent.movement) {
-        store.startMovement(agentId, zone, pos);
-      }
-    };
+    const actState = createActivityState();
+    stateRef.current = actState;
+    sharedActivityState = actState;
 
     const interval = setInterval(() => {
       const store = useOfficeStore.getState();
       const agents = store.agents;
 
-      // Cancel roaming for agents that became active
-      for (const [agentId] of roamState.active) {
-        const agent = agents.get(agentId);
-        if (agent && agent.status !== "idle") {
-          const returnInfo = cancelRoaming(roamState, agentId);
-          if (returnInfo) {
-            store.startMovement(agentId, returnInfo.returnZone, returnInfo.returnPos);
-          }
-        }
-      }
+      const dt = TICK_INTERVAL_MS / 1000;
+      const result = tickActivities(actState, agents, dt);
+      lastTickResult = result;
 
-      // Tick roaming — get new movement commands
-      const commands = tickRoaming(roamState, agents);
-      for (const cmd of commands) {
-        store.startMovement(cmd.agentId, cmd.toZone, cmd.targetPos);
+      // Execute move commands
+      for (const cmd of result.moveCommands) {
+        const agent = agents.get(cmd.agentId);
+        if (agent && !agent.movement) {
+          store.startMovement(cmd.agentId, cmd.toZone, cmd.targetPos);
+        }
       }
     }, TICK_INTERVAL_MS);
 
     return () => {
       clearInterval(interval);
       stateRef.current = null;
+      sharedActivityState = null;
+      lastTickResult = null;
     };
   }, [connectionStatus]);
 }

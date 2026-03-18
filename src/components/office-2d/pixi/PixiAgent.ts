@@ -17,6 +17,8 @@ import {
   type IdleBehaviorState,
 } from "@/lib/idle-behaviors";
 import { getSpritePathForAgent } from "@/lib/agent-sprites";
+import { getActivityState } from "@/hooks/useCasualRoaming";
+import { getAgentFacingTarget } from "@/lib/office-activities";
 
 // ═══════════════════════════════════════════════════════════
 // Gather.town-style agent character
@@ -96,6 +98,9 @@ export class PixiAgent {
 
   // Walk bob
   private walkBobPhase: number = 0;
+
+  // Activity facing target position (set externally by PixiFloorPlan)
+  private _facingTargetPos: { x: number; y: number } | null = null;
 
   constructor(agent: VisualAgent) {
     this.id = agent.id;
@@ -516,13 +521,37 @@ export class PixiAgent {
           this.sprite.texture = this.frames[frameIdx];
         }
       } else {
-        // Idle facing
-        const idleFacing = getIdleFacingDirection(this.idleBehavior);
-        const idleDir = idleFacing !== null ? idleFacing : this.currentDir;
-        const frameIdx = idleDir * SHEET_COLS + 1;
+        // Check activity-based facing first
+        const actState = getActivityState();
+        let facingDir: number | null = null;
+        if (actState) {
+          const facingTargetId = getAgentFacingTarget(actState, this.id);
+          if (facingTargetId) {
+            // We need the target's position — store it externally
+            const targetPos = this._facingTargetPos;
+            if (targetPos) {
+              const fdx = targetPos.x - this.currentX;
+              const fdy = targetPos.y - this.currentY;
+              if (Math.abs(fdx) > Math.abs(fdy)) {
+                facingDir = fdx > 0 ? DIR_RIGHT : DIR_LEFT;
+              } else {
+                facingDir = fdy > 0 ? DIR_DOWN : DIR_UP;
+              }
+            }
+          }
+        }
+
+        // Idle facing (fallback)
+        if (facingDir === null) {
+          const idleFacing = getIdleFacingDirection(this.idleBehavior);
+          facingDir = idleFacing !== null ? idleFacing : this.currentDir;
+        }
+
+        const frameIdx = facingDir * SHEET_COLS + 1;
         if (this.frames[frameIdx]) {
           this.sprite.texture = this.frames[frameIdx];
         }
+        this.currentDir = facingDir;
         this.animFrame = 1;
         this.animTimer = 0;
       }
@@ -568,6 +597,11 @@ export class PixiAgent {
       width: DISPLAY_SIZE,
       height: DISPLAY_SIZE + 20,
     };
+  }
+
+  /** Set the position of the agent this one should face toward */
+  public setFacingTarget(pos: { x: number; y: number } | null): void {
+    this._facingTargetPos = pos;
   }
 
   /** Jump position immediately (no lerp) */

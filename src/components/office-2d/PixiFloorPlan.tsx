@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { Application, Container, TextureStyle } from "pixi.js";
 import { useOfficeStore } from "@/store/office-store";
 import { SVG_WIDTH, SVG_HEIGHT } from "@/lib/constants";
+import { getActivityState } from "@/hooks/useCasualRoaming";
+import { getAgentFacingTarget } from "@/lib/office-activities";
 import { OfficeWorld } from "./pixi/OfficeWorld";
 import { PixiAgent } from "./pixi/PixiAgent";
 import { MiniMap } from "./pixi/MiniMap";
@@ -215,12 +217,27 @@ export function PixiFloorPlan() {
           }
         }
 
-        // Update agents
+        // Update agents + activity facing
+        const actState = getActivityState();
         for (const [id, pixiAgent] of agentPixiMap) {
           // Re-read position after tickMovement updated it
           const freshAgent = store.agents.get(id);
           if (freshAgent) {
             pixiAgent.updateFromAgent(freshAgent);
+          }
+          // Set facing target from activity system
+          if (actState) {
+            const facingId = getAgentFacingTarget(actState, id);
+            if (facingId) {
+              const targetAgent = store.agents.get(facingId);
+              if (targetAgent) {
+                pixiAgent.setFacingTarget({ x: targetAgent.position.x, y: targetAgent.position.y });
+              } else {
+                pixiAgent.setFacingTarget(null);
+              }
+            } else {
+              pixiAgent.setFacingTarget(null);
+            }
           }
           pixiAgent.tick(dt);
         }
