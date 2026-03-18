@@ -119,10 +119,11 @@
   }
 }
 
-/* Chat dialog slide animations */
+/* Chat dialog slide animations — use translateY(20px) instead of 100%
+   so the animation isn't clipped by the parent overflow-hidden */
 @keyframes chat-slide-up {
   from {
-    transform: translateY(100%);
+    transform: translateY(24px);
     opacity: 0;
   }
   to {
@@ -137,7 +138,7 @@
     opacity: 1;
   }
   to {
-    transform: translateY(100%);
+    transform: translateY(24px);
     opacity: 0;
   }
 }
