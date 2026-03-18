@@ -6,7 +6,7 @@ import {
   Vignette,
   ChromaticAberration,
 } from "@react-three/postprocessing";
-import { useMemo, useRef, useEffect, useCallback } from "react";
+import { useMemo, useRef, useEffect, useCallback, useState } from "react";
 import * as THREE from "three";
 import { ZONES } from "@/lib/constants";
 import { position2dTo3d } from "@/lib/position-allocator";
@@ -122,6 +122,11 @@ function CameraController() {
   const controlsRef = useRef<any>(null);
   const { camera } = useThree();
 
+  // Track mode transitions — only animate camera during transitions
+  const prevModeRef = useRef<CameraMode>(cameraMode);
+  const transitionTimer = useRef(0);
+  const isTransitioning = useRef(false);
+
   // Smooth intermediary vectors
   const smoothPos = useRef(new THREE.Vector3().copy(camera.position));
   const smoothTarget = useRef(new THREE.Vector3(...SCENE_CENTER));
@@ -142,18 +147,38 @@ function CameraController() {
 
     const t = state.clock.elapsedTime;
 
+    // Detect mode change → start transition
+    if (prevModeRef.current !== cameraMode) {
+      prevModeRef.current = cameraMode;
+      isTransitioning.current = true;
+      transitionTimer.current = 0;
+      // Sync smooth refs to current camera position for smooth transition
+      smoothPos.current.copy(camera.position);
+      smoothTarget.current.copy(controls.target);
+    }
+
+    // Advance transition timer
+    if (isTransitioning.current) {
+      transitionTimer.current += delta;
+      if (transitionTimer.current > 1.5) {
+        isTransitioning.current = false;
+      }
+    }
+
     switch (cameraMode) {
       case "overview": {
-        // Lerp camera to overview position
-        smoothPos.current.lerp(OVERVIEW_POS, 0.03);
-        smoothTarget.current.lerp(OVERVIEW_TARGET, 0.03);
-        camera.position.copy(smoothPos.current);
-        controls.target.copy(smoothTarget.current);
+        if (isTransitioning.current) {
+          // Only animate during transition, then hand off to OrbitControls
+          smoothPos.current.lerp(OVERVIEW_POS, 0.05);
+          smoothTarget.current.lerp(OVERVIEW_TARGET, 0.05);
+          camera.position.copy(smoothPos.current);
+          controls.target.copy(smoothTarget.current);
+        }
+        // OrbitControls has full control once transition ends
         controls.enabled = true;
         controls.autoRotate = false;
 
-        // Reset FOV smoothly
-        if (camera instanceof THREE.PerspectiveCamera) {
+        if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.fov - DEFAULT_FOV) > 0.1) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, DEFAULT_FOV, 0.05);
           camera.updateProjectionMatrix();
         }
@@ -163,26 +188,23 @@ function CameraController() {
       case "follow": {
         const agentPos = getSelectedAgentPos();
         if (!agentPos) {
-          // Fallback to overview
-          smoothPos.current.lerp(OVERVIEW_POS, 0.03);
-          smoothTarget.current.lerp(OVERVIEW_TARGET, 0.03);
-          camera.position.copy(smoothPos.current);
-          controls.target.copy(smoothTarget.current);
-        } else {
-          const desiredTarget = agentPos.clone();
-          desiredTarget.y = 1.0;
-          const desiredPos = agentPos.clone().add(FOLLOW_OFFSET);
-
-          smoothTarget.current.lerp(desiredTarget, FOLLOW_LERP);
-          smoothPos.current.lerp(desiredPos, FOLLOW_LERP);
-
-          camera.position.copy(smoothPos.current);
-          controls.target.copy(smoothTarget.current);
+          // Fallback: let orbit controls work freely
+          controls.enabled = true;
+          break;
         }
+        const desiredTarget = agentPos.clone();
+        desiredTarget.y = 1.0;
+        const desiredPos = agentPos.clone().add(FOLLOW_OFFSET);
+
+        smoothTarget.current.lerp(desiredTarget, FOLLOW_LERP);
+        smoothPos.current.lerp(desiredPos, FOLLOW_LERP);
+
+        camera.position.copy(smoothPos.current);
+        controls.target.copy(smoothTarget.current);
         controls.enabled = true;
         controls.autoRotate = false;
 
-        if (camera instanceof THREE.PerspectiveCamera) {
+        if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.fov - DEFAULT_FOV) > 0.1) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, DEFAULT_FOV, 0.05);
           camera.updateProjectionMatrix();
         }
@@ -208,11 +230,9 @@ function CameraController() {
 
         camera.position.copy(smoothPos.current);
         controls.target.copy(smoothTarget.current);
-
-        // Disable manual orbit in cinematic mode
         controls.enabled = false;
 
-        if (camera instanceof THREE.PerspectiveCamera) {
+        if (camera instanceof THREE.PerspectiveCamera && Math.abs(camera.fov - DEFAULT_FOV) > 0.1) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, DEFAULT_FOV, 0.05);
           camera.updateProjectionMatrix();
         }
@@ -222,32 +242,25 @@ function CameraController() {
       case "firstPerson": {
         const agentPos = getSelectedAgentPos();
         if (!agentPos) {
-          // Fallback to overview
-          smoothPos.current.lerp(OVERVIEW_POS, 0.03);
-          smoothTarget.current.lerp(OVERVIEW_TARGET, 0.03);
-          camera.position.copy(smoothPos.current);
-          controls.target.copy(smoothTarget.current);
           controls.enabled = true;
-        } else {
-          const desiredPos = agentPos.clone();
-          desiredPos.y = FIRST_PERSON_EYE_Y;
-          // Slightly behind agent
-          desiredPos.z += 0.8;
-
-          // Look forward (toward scene center)
-          const desiredTarget = new THREE.Vector3(
-            agentPos.x,
-            FIRST_PERSON_EYE_Y,
-            agentPos.z - 4,
-          );
-
-          smoothPos.current.lerp(desiredPos, 0.04);
-          smoothTarget.current.lerp(desiredTarget, 0.04);
-
-          camera.position.copy(smoothPos.current);
-          controls.target.copy(smoothTarget.current);
-          controls.enabled = true;
+          break;
         }
+        const desiredPos = agentPos.clone();
+        desiredPos.y = FIRST_PERSON_EYE_Y;
+        desiredPos.z += 0.8;
+
+        const desiredTarget = new THREE.Vector3(
+          agentPos.x,
+          FIRST_PERSON_EYE_Y,
+          agentPos.z - 4,
+        );
+
+        smoothPos.current.lerp(desiredPos, 0.04);
+        smoothTarget.current.lerp(desiredTarget, 0.04);
+
+        camera.position.copy(smoothPos.current);
+        controls.target.copy(smoothTarget.current);
+        controls.enabled = true;
 
         if (camera instanceof THREE.PerspectiveCamera) {
           camera.fov = THREE.MathUtils.lerp(camera.fov, FIRST_PERSON_FOV, 0.05);
@@ -415,10 +428,46 @@ function SceneContent() {
 /* ── Main export ─────────────────────────────────────────── */
 
 export default function Scene3D() {
+  const canvasKey = useRef(0);
+  const [contextLost, setContextLost] = useState(false);
+
+  const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+    const canvas = gl.domElement;
+    const onLost = (e: Event) => {
+      e.preventDefault();
+      setContextLost(true);
+    };
+    const onRestored = () => {
+      setContextLost(false);
+    };
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+  }, []);
+
+  // If context lost, remount the Canvas
+  useEffect(() => {
+    if (contextLost) {
+      const timer = setTimeout(() => {
+        canvasKey.current += 1;
+        setContextLost(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [contextLost]);
+
+  if (contextLost) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gray-950">
+        <span className="text-sm text-gray-400">Recovering 3D view...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full w-full" style={{ position: "relative" }}>
       <Canvas
-        gl={{ antialias: true, alpha: false }}
+        key={canvasKey.current}
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         shadows
         camera={{
           fov: DEFAULT_FOV,
@@ -426,6 +475,7 @@ export default function Scene3D() {
           near: 0.1,
           far: 200,
         }}
+        onCreated={handleCreated}
       >
         <SceneContent />
       </Canvas>

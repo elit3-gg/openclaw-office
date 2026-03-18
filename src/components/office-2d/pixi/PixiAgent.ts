@@ -748,6 +748,14 @@ export class PixiAgent {
     }
   }
 
+  // Store agent data for dialogue system
+  private _allAgents: Map<string, VisualAgent> | null = null;
+
+  /** Update agent references for role-aware dialogue */
+  public setAgentData(_agent: VisualAgent, allAgents: Map<string, VisualAgent>): void {
+    this._allAgents = allAgents;
+  }
+
   private updateActivityDialogue(dt: number): void {
     const actState = getActivityState();
     if (!actState) {
@@ -761,8 +769,8 @@ export class PixiAgent {
       return;
     }
 
-    // Get dialogue from the activity system
-    const dialogue = getAgentDialogue(actState, this.id, dt * 0.016);
+    // Get dialogue from the activity system (with agent context for role-aware dialogue)
+    const dialogue = getAgentDialogue(actState, this.id, dt * 0.016, this._allAgents ?? undefined);
     
     if (dialogue && dialogue !== this.currentDialogue) {
       this.currentDialogue = dialogue;

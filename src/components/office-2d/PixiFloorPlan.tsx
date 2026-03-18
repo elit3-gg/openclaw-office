@@ -316,6 +316,9 @@ export function PixiFloorPlan() {
             agentPixiMap.set(id, pixiAgent);
           }
           pixiAgent.updateFromAgent(agent);
+          
+          // Update agent data for role-aware dialogue
+          pixiAgent.setAgentData(agent, storeAgents);
 
           // Update selection state
           pixiAgent.setSelected(state.selectedAgentId === id);
