@@ -259,9 +259,10 @@ function SpeechBubbleOverlay({ text }: { text: string }) {
 /** Activity dialogue bubble — shows contextual messages during activities */
 function ActivityDialogueBubble({ agentId }: { agentId: string }) {
   const actState = getActivityState();
+  const agents = useOfficeStore((s) => s.agents);
   if (!actState) return null;
 
-  const dialogue = getAgentDialogue(actState, agentId, 0.1);
+  const dialogue = getAgentDialogue(actState, agentId, 0.1, agents);
   if (!dialogue) return null;
 
   return (

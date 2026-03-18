@@ -101,8 +101,8 @@ export function PixiFloorPlan() {
 
       // Connection lines layer
       const connLines = new ConnectionLines();
-      connLines.graphics.zIndex = 5;
-      worldContainer.addChild(connLines.graphics);
+      connLines.container.zIndex = 5;
+      worldContainer.addChild(connLines.container);
       connectionLinesRef.current = connLines;
 
       // Agents layer

@@ -1,4 +1,4 @@
-import { Graphics } from "pixi.js";
+import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { CollaborationLink, VisualAgent } from "@/gateway/types";
 
 // ═══════════════════════════════════════════════════════════
@@ -35,8 +35,19 @@ interface ConnectionFlash {
   maxAge: number;    // When to remove
 }
 
+const LABEL_STYLE = new TextStyle({
+  fontFamily: "'Silkscreen', 'JetBrains Mono', monospace",
+  fontSize: 9,
+  fill: 0xffffff,
+  align: "center",
+  dropShadow: { color: 0x000000, blur: 3, alpha: 0.8, distance: 0 },
+});
+
 export class ConnectionLines {
+  public readonly container: Container;
   public readonly graphics: Graphics;
+  private labelContainer: Container;
+  private labelPool: Map<string, { bg: Graphics; text: Text }> = new Map();
   private animPhase: number = 0;
   private particlePool: Map<string, FlowParticle[]> = new Map();
   private jitterPool: Map<string, JitterSeed> = new Map();
@@ -44,7 +55,11 @@ export class ConnectionLines {
   private previousKeys: Set<string> = new Set();
 
   constructor() {
+    this.container = new Container();
     this.graphics = new Graphics();
+    this.labelContainer = new Container();
+    this.container.addChild(this.graphics);
+    this.container.addChild(this.labelContainer);
   }
 
   private getLinkKey(link: CollaborationLink): string {
@@ -251,6 +266,63 @@ export class ConnectionLines {
       this.graphics.fill({ color: lineColor, alpha: baseAlpha * 0.8 });
       this.graphics.circle(x2, y2, 1.5);
       this.graphics.fill({ color: 0xffffff, alpha: baseAlpha * 0.6 });
+    }
+
+    // ── Session labels at midpoint of each link ──
+    const activeLabels = new Set<string>();
+    for (const link of links) {
+      const source = agents.get(link.sourceId);
+      const target = agents.get(link.targetId);
+      if (!source || !target) continue;
+      if (link.strength < 0.2) continue;
+
+      const key = this.getLinkKey(link);
+      activeLabels.add(key);
+
+      const mx = (source.position.x + target.position.x) / 2;
+      const my = (source.position.y + target.position.y) / 2 - 12;
+
+      // Determine label text
+      const srcName = source.name.slice(0, 8);
+      const tgtName = target.name.slice(0, 8);
+      const activity = source.status === "speaking" || target.status === "speaking"
+        ? "talking"
+        : source.zone === "meeting" && target.zone === "meeting"
+          ? "in meeting"
+          : "collaborating";
+      const labelText = `${srcName} ↔ ${tgtName} · ${activity}`;
+
+      let label = this.labelPool.get(key);
+      if (!label) {
+        const bg = new Graphics();
+        const text = new Text({ text: labelText, style: LABEL_STYLE });
+        text.anchor.set(0.5, 0.5);
+        bg.addChild(text);
+        this.labelContainer.addChild(bg);
+        label = { bg, text };
+        this.labelPool.set(key, label);
+      }
+
+      label.text.text = labelText;
+      label.bg.clear();
+      const tw = label.text.width + 12;
+      const th = label.text.height + 6;
+      label.bg.roundRect(-tw / 2, -th / 2, tw, th, 4);
+      label.bg.fill({ color: 0x0d0d1a, alpha: 0.85 });
+      label.bg.roundRect(-tw / 2, -th / 2, tw, th, 4);
+      label.bg.stroke({ color: link.strength > 0.5 ? COLOR_ACTIVE : COLOR_DEFAULT, width: 0.8, alpha: 0.5 });
+      label.bg.x = mx;
+      label.bg.y = my;
+      label.bg.alpha = Math.min(1, link.strength + 0.3);
+    }
+
+    // Remove stale labels
+    for (const [key, label] of this.labelPool) {
+      if (!activeLabels.has(key)) {
+        this.labelContainer.removeChild(label.bg);
+        label.bg.destroy({ children: true });
+        this.labelPool.delete(key);
+      }
     }
 
     // Track previous keys for flash detection

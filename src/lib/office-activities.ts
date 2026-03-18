@@ -19,7 +19,6 @@
  */
 
 import type { VisualAgent, AgentZone } from "@/gateway/types";
-// Note: VisualAgent is already imported above
 import { ZONES } from "./constants";
 import { getDialogueForActivity, shouldShowDialogue, getDialogueProbability } from "./agent-dialogue";
 
