@@ -279,10 +279,10 @@ function CameraController() {
       enableRotate={true}
       enablePan={true}
       enableZoom={true}
-      minPolarAngle={Math.PI / 8}
-      maxPolarAngle={Math.PI / 2.8}
-      minDistance={2}
-      maxDistance={40}
+      minPolarAngle={Math.PI / 12}
+      maxPolarAngle={Math.PI / 2.2}
+      minDistance={1}
+      maxDistance={50}
       target={SCENE_CENTER}
       enableDamping
       dampingFactor={0.08}
