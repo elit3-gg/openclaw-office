@@ -206,8 +206,22 @@ export function PixiFloorPlan() {
         // Update world particles
         world.tick(dt);
 
+        // Tick movement for all walking agents (advance path progress)
+        const store = useOfficeStore.getState();
+        const deltaSeconds = dt / 60; // PixiJS dt is in frames (~60fps)
+        for (const [id, agent] of store.agents) {
+          if (agent.movement) {
+            store.tickMovement(id, deltaSeconds);
+          }
+        }
+
         // Update agents
-        for (const [, pixiAgent] of agentPixiMap) {
+        for (const [id, pixiAgent] of agentPixiMap) {
+          // Re-read position after tickMovement updated it
+          const freshAgent = store.agents.get(id);
+          if (freshAgent) {
+            pixiAgent.updateFromAgent(freshAgent);
+          }
           pixiAgent.tick(dt);
         }
 
