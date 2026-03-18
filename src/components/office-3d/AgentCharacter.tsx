@@ -57,6 +57,56 @@ function statusGlowIntensity(status: VisualAgent["status"]): number {
   }
 }
 
+// Height constants for positioning overlays relative to bigger characters
+const CHAR_TOP = 1.55; // Top of 1.4-height character + margin
+const NAME_Y = -0.15;  // Below character feet
+
+/** Floating name plate — matches 2D PixiAgent style */
+function NamePlate({ name, status }: { name: string; status: VisualAgent["status"] }) {
+  const statusColor = statusGlowColor(status);
+  const displayName = name.length > 12 ? name.slice(0, 11) + "…" : name;
+
+  return (
+    <Html position={[0, NAME_Y, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+          padding: "2px 8px",
+          borderRadius: "6px",
+          background: "rgba(26, 26, 46, 0.85)",
+          border: "0.5px solid rgba(58, 58, 90, 0.6)",
+          whiteSpace: "nowrap",
+          userSelect: "none",
+        }}
+      >
+        {/* Status dot */}
+        <div
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor: statusColor === "#000000" ? "#6b7280" : statusColor,
+            boxShadow: statusColor !== "#000000" ? `0 0 4px ${statusColor}` : undefined,
+          }}
+        />
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: "10px",
+            fontWeight: 600,
+            color: "#ffffff",
+            lineHeight: "14px",
+          }}
+        >
+          {displayName}
+        </span>
+      </div>
+    </Html>
+  );
+}
+
 /** Status icon shown floating above head */
 function StatusIcon({ status }: { status: VisualAgent["status"] }) {
   if (status === "idle" || status === "offline") return null;
@@ -73,7 +123,7 @@ function StatusIcon({ status }: { status: VisualAgent["status"] }) {
   if (!info) return null;
 
   return (
-    <Html position={[0, 1.05, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.1, 0]} center transform={false} style={{ pointerEvents: "none" }}>
       <div
         className={`flex h-5 w-5 items-center justify-center rounded-full ${info.bg} text-[10px] shadow-lg`}
         style={{ animation: "pulse 2s ease-in-out infinite" }}
@@ -84,11 +134,11 @@ function StatusIcon({ status }: { status: VisualAgent["status"] }) {
   );
 }
 
-/** Shadow blob projected on ground plane */
+/** Shadow blob projected on ground plane — sized for bigger characters */
 function ShadowBlob({ opacity = 0.2 }: { opacity?: number }) {
   return (
-    <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <circleGeometry args={[0.22, 24]} />
+    <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1, 0.5, 1]}>
+      <circleGeometry args={[0.35, 24]} />
       <meshBasicMaterial color="#000000" transparent opacity={opacity} depthWrite={false} />
     </mesh>
   );
@@ -158,21 +208,48 @@ function SpawnParticles({ active }: { active: boolean }) {
   );
 }
 
-/** Animated speech bubble */
+/** Animated speech bubble — matches 2D PixiAgent dark frosted style */
 function SpeechBubbleOverlay({ text }: { text: string }) {
-  const truncated = text.length > 60 ? text.slice(0, 57) + "..." : text;
+  const truncated = text.length > 100 ? text.slice(0, 97) + "..." : text;
   return (
-    <Html position={[0, 1.2, 0]} center transform={false} style={{ pointerEvents: "none" }}>
-      <div
-        className="pointer-events-none animate-bounce"
-        style={{ animationDuration: "3s", animationIterationCount: "infinite" }}
-      >
+    <Html position={[0, CHAR_TOP + 0.25, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+      <div className="pointer-events-none" style={{ animation: "pulse 3s ease-in-out infinite" }}>
         <div
-          className="relative max-w-[180px] rounded-lg bg-purple-600/90 px-3 py-1.5 text-[10px] leading-tight text-white shadow-lg backdrop-blur-sm"
-          style={{ wordBreak: "break-word" }}
+          style={{
+            position: "relative",
+            maxWidth: "180px",
+            padding: "6px 10px",
+            borderRadius: "8px",
+            background: "rgba(30, 30, 58, 0.95)",
+            border: "1.5px solid rgba(168, 85, 247, 0.6)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+            wordBreak: "break-word",
+          }}
         >
-          {truncated}
-          <div className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-purple-600/90" />
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: "10px",
+              lineHeight: "14px",
+              color: "#ffffff",
+            }}
+          >
+            {truncated}
+          </span>
+          {/* Pointer triangle */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "-6px",
+              left: "50%",
+              transform: "translateX(-50%) rotate(45deg)",
+              width: "10px",
+              height: "10px",
+              background: "rgba(30, 30, 58, 0.95)",
+              borderRight: "1.5px solid rgba(168, 85, 247, 0.6)",
+              borderBottom: "1.5px solid rgba(168, 85, 247, 0.6)",
+            }}
+          />
         </div>
       </div>
     </Html>
@@ -193,32 +270,36 @@ function InteractionBubble({ agentId }: { agentId: string }) {
   const isDrinking = tickResult.drinkingAgents.has(agentId);
 
   let icon = "";
-  let bg = "bg-gray-600/80";
 
   if (isSpeaking) {
     icon = "💬";
-    bg = "bg-purple-500/90";
   } else if (isDrinking) {
     icon = "☕";
-    bg = "bg-amber-600/90";
   } else if (isSitting) {
     icon = "🛋️";
-    bg = "bg-indigo-500/90";
   } else if (actType === "meeting") {
     icon = "📋";
-    bg = "bg-blue-500/80";
   } else if (actType === "waterCooler") {
     icon = "🚰";
-    bg = "bg-cyan-500/80";
   } else {
     return null;
   }
 
   return (
-    <Html position={[0, 1.6, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+    <Html position={[0, CHAR_TOP + 0.15, 0]} center transform={false} style={{ pointerEvents: "none" }}>
       <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full ${bg} text-[12px] shadow-lg`}
-        style={{ animation: isSpeaking ? "pulse 1.5s ease-in-out infinite" : undefined }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "22px",
+          height: "22px",
+          borderRadius: "50%",
+          background: isSpeaking ? "rgba(168, 85, 247, 0.9)" : isDrinking ? "rgba(217, 119, 6, 0.9)" : isSitting ? "rgba(99, 102, 241, 0.9)" : "rgba(59, 130, 246, 0.8)",
+          fontSize: "12px",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+          animation: isSpeaking ? "pulse 1.5s ease-in-out infinite" : undefined,
+        }}
       >
         {icon}
       </div>
@@ -386,8 +467,8 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       <group ref={bodyRef}>
         {/* Status emissive glow shell behind sprite */}
         {glowIntensity > 0 && (
-          <mesh ref={glowRef} position={[0, 0.3, -0.05]}>
-            <planeGeometry args={[0.7, 0.7]} />
+          <mesh ref={glowRef} position={[0, 0.7, -0.05]}>
+            <planeGeometry args={[1.2, 1.2]} />
             <meshStandardMaterial
               color={glowColor}
               emissive={glowColor}
@@ -415,20 +496,38 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
 
         {/* Sub-agent "S" badge */}
         {isSubAgent && !isPlaceholder && (
-          <Html position={[0.15, 0.55, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
-            <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-400 text-[8px] font-bold text-white shadow">
+          <Html position={[0.3, 1.2, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
+            <div
+              style={{
+                display: "flex",
+                width: "14px",
+                height: "14px",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                background: "#06b6d4",
+                border: "2px solid #1a1a2e",
+                fontSize: "8px",
+                fontWeight: "bold",
+                color: "#ffffff",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }}
+            >
               S
             </div>
           </Html>
         )}
       </group>
 
+      {/* Permanent name plate below character — matches 2D style */}
+      <NamePlate name={agent.name} status={agent.status} />
+
       {/* Status icon floating above head */}
       <StatusIcon status={agent.status} />
 
       {agent.status === "thinking" && <ThinkingIndicator />}
       {agent.status === "tool_calling" && agent.currentTool && (
-        <SkillHologram tool={{ name: agent.currentTool.name }} position={[0.3, 0.5, -0.3]} />
+        <SkillHologram tool={{ name: agent.currentTool.name }} position={[0.4, 0.7, -0.3]} />
       )}
       {agent.status === "error" && <ErrorIndicator />}
 
@@ -444,7 +543,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       {isSelected && (
         <group>
           <mesh ref={selectionRingRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.28, 0.34, 32]} />
+            <ringGeometry args={[0.35, 0.42, 32]} />
             <meshStandardMaterial
               color="#3b82f6"
               emissive="#3b82f6"
@@ -455,7 +554,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
           </mesh>
           {/* Outer glow ring */}
           <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.34, 0.42, 32]} />
+            <ringGeometry args={[0.42, 0.52, 32]} />
             <meshStandardMaterial
               color="#3b82f6"
               emissive="#3b82f6"
@@ -469,8 +568,21 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       )}
 
       {hovered && (
-        <Html position={[0, 1.1, 0]} center transform={false} style={{ pointerEvents: "none" }}>
-          <div className="pointer-events-none whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[11px] text-white shadow">
+        <Html position={[0, CHAR_TOP + 0.05, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+          <div
+            style={{
+              whiteSpace: "nowrap",
+              padding: "3px 8px",
+              borderRadius: "6px",
+              background: "rgba(26, 26, 46, 0.92)",
+              border: "1px solid rgba(58, 58, 90, 0.6)",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              fontSize: "11px",
+              color: "#ffffff",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+              pointerEvents: "none",
+            }}
+          >
             {agent.name} — {t(`agent.statusLabels.${agent.status}`)}
           </div>
         </Html>
