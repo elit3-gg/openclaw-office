@@ -9,6 +9,7 @@ import {
 // ═══════════════════════════════════════════════════════════
 // Gather.town-inspired dark office world
 // Tile-based floor, warm ambient lighting, cozy pixel-art feel
+// Now with richer furniture, ambient animations, and more life!
 // ═══════════════════════════════════════════════════════════
 
 // Color palette — warm dark theme (Gather.town inspired)
@@ -60,6 +61,24 @@ interface Particle {
   color: number;
 }
 
+interface SteamParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  alpha: number;
+  size: number;
+  life: number;
+}
+
+interface GlowingObject {
+  graphics: Graphics;
+  baseAlpha: number;
+  phase: number;
+  speed: number;
+  color: number;
+}
+
 export class OfficeWorld {
   public readonly container: Container;
 
@@ -71,13 +90,22 @@ export class OfficeWorld {
   private particleLayer: Container;
   private gridLayer: Container;
   private ambientLayer: Container;
+  private decorLayer: Container;
 
   private particles: Particle[] = [];
+  private steamParticles: SteamParticle[] = [];
   private particleGraphics: Graphics;
+  private steamGraphics: Graphics;
   private _showGrid: boolean = false;
   private gridGraphics: Graphics;
   private ambientGraphics: Graphics;
   private ambientPhase: number = 0;
+
+  // Glowing objects for ambient life
+  private glowingObjects: GlowingObject[] = [];
+  
+  // Ceiling lights
+  private ceilingLights: { x: number; y: number; graphics: Graphics }[] = [];
 
   constructor() {
     this.container = new Container();
@@ -92,26 +120,30 @@ export class OfficeWorld {
     this.furnitureLayer = new Container();
     this.furnitureLayer.zIndex = 2;
 
+    this.decorLayer = new Container();
+    this.decorLayer.zIndex = 3;
+
     this.wallLayer = new Container();
-    this.wallLayer.zIndex = 3;
+    this.wallLayer.zIndex = 4;
 
     this.labelLayer = new Container();
-    this.labelLayer.zIndex = 4;
+    this.labelLayer.zIndex = 5;
 
     this.ambientLayer = new Container();
-    this.ambientLayer.zIndex = 5;
+    this.ambientLayer.zIndex = 6;
 
     this.particleLayer = new Container();
-    this.particleLayer.zIndex = 6;
+    this.particleLayer.zIndex = 7;
 
     this.gridLayer = new Container();
-    this.gridLayer.zIndex = 7;
+    this.gridLayer.zIndex = 8;
     this.gridLayer.visible = false;
 
     this.container.addChild(
       this.backgroundLayer,
       this.floorLayer,
       this.furnitureLayer,
+      this.decorLayer,
       this.wallLayer,
       this.labelLayer,
       this.ambientLayer,
@@ -121,6 +153,9 @@ export class OfficeWorld {
 
     this.particleGraphics = new Graphics();
     this.particleLayer.addChild(this.particleGraphics);
+
+    this.steamGraphics = new Graphics();
+    this.particleLayer.addChild(this.steamGraphics);
 
     this.gridGraphics = new Graphics();
     this.gridLayer.addChild(this.gridGraphics);
@@ -133,11 +168,14 @@ export class OfficeWorld {
     this.buildWalls();
     this.buildDoors();
     this.buildFurniture();
+    this.buildDecorations();
+    this.buildCeilingLights();
     this.buildLabels();
     this.buildGrid();
     this.buildEntrance();
     this.buildAmbientLighting();
     this.initParticles();
+    this.initSteamParticles();
   }
 
   // ─── BACKGROUND ───────────────────────────────────────────
@@ -270,6 +308,11 @@ export class OfficeWorld {
         // Rug border
         g.roundRect(rugX + 3, rugY + 3, rugW - 6, rugH - 6, 6);
         g.stroke({ color: ACCENT_PURPLE, width: 0.5, alpha: 0.15 });
+        // Rug center pattern
+        g.circle(rugX + rugW / 2, rugY + rugH / 2, 25);
+        g.stroke({ color: 0x7a6aaa, width: 1, alpha: 0.12 });
+        g.circle(rugX + rugW / 2, rugY + rugH / 2, 15);
+        g.fill({ color: 0x5a4a7a, alpha: 0.15 });
 
       } else if (key === "desk" || key === "hotDesk") {
         // Subtle tech grid for work areas
@@ -507,21 +550,7 @@ export class OfficeWorld {
     // Whiteboard on wall
     const wbX = mz.x + mz.width - 90;
     const wbY = mz.y + 18;
-    g.roundRect(wbX, wbY, 70, 45, 4);
-    g.fill({ color: 0x3a3a52, alpha: 0.8 });
-    g.stroke({ color: 0x6a6a8a, width: 1 });
-    // Whiteboard surface
-    g.roundRect(wbX + 4, wbY + 4, 62, 37, 2);
-    g.fill({ color: 0xf0f0f0, alpha: 0.06 });
-    // Marker tray
-    g.roundRect(wbX + 10, wbY + 42, 50, 4, 2);
-    g.fill({ color: 0x5a5a6a, alpha: 0.5 });
-    // Colored markers
-    const markerColors = [0xff4444, 0x44ff44, 0x4444ff];
-    markerColors.forEach((mc, i) => {
-      g.roundRect(wbX + 15 + i * 14, wbY + 42, 8, 3, 1);
-      g.fill({ color: mc, alpha: 0.6 });
-    });
+    this.drawWhiteboard(g, wbX, wbY);
 
     // ══ LOUNGE ══
     const lz = ZONES.lounge;
@@ -567,6 +596,12 @@ export class OfficeWorld {
     g.roundRect(logoCX - 81, rdY + 3, 162, 20, 10);
     g.fill({ color: DESK_TOP_COLOR, alpha: 0.4 });
 
+    // === COFFEE MACHINE ===
+    this.drawCoffeeMachine(g, lz.x + 450, lz.y + 30);
+
+    // === WATER COOLER ===
+    this.drawWaterCooler(g, lz.x + 450, lz.y + 100);
+
     // Plants
     this.drawPlant(g, logoCX - 140, logoY + 20);
     this.drawPlant(g, logoCX + 140, logoY + 20);
@@ -607,6 +642,90 @@ export class OfficeWorld {
     logoText.x = logoCX;
     logoText.y = logoY + 18;
     this.furnitureLayer.addChild(logoText);
+  }
+
+  // ─── DECORATIONS (wall art, clocks, posters) ──────────────
+
+  private buildDecorations(): void {
+    const g = new Graphics();
+    
+    // === WALL DECORATIONS ===
+    
+    // Desk zone - motivational poster
+    const dz = ZONES.desk;
+    this.drawPoster(g, dz.x + 20, dz.y + 50, 0x3060a0);
+    
+    // Wall clock in desk zone
+    this.drawClock(g, dz.x + dz.width - 40, dz.y + 30);
+    
+    // Hot desk zone - picture frames
+    const hz = ZONES.hotDesk;
+    this.drawPictureFrame(g, hz.x + 30, hz.y + 50, 45, 35, 0x5a4a3a);
+    this.drawPictureFrame(g, hz.x + hz.width - 60, hz.y + 45, 50, 40, 0x4a5a6a);
+    
+    // Meeting room - presentation screen / another whiteboard element
+    const mz = ZONES.meeting;
+    this.drawPoster(g, mz.x + 25, mz.y + 50, 0x505080);
+    
+    // Clock in meeting room
+    this.drawClock(g, mz.x + mz.width - 30, mz.y + 25);
+    
+    // Lounge decorations
+    const lz = ZONES.lounge;
+    this.drawPictureFrame(g, lz.x + 20, lz.y + 30, 60, 45, 0x6a3a5a);
+    
+    this.decorLayer.addChild(g);
+  }
+
+  // ─── CEILING LIGHTS ───────────────────────────────────────
+
+  private buildCeilingLights(): void {
+    const lightPositions = [
+      // Desk zone
+      { x: ZONES.desk.x + ZONES.desk.width * 0.25, y: ZONES.desk.y + ZONES.desk.height * 0.33 },
+      { x: ZONES.desk.x + ZONES.desk.width * 0.75, y: ZONES.desk.y + ZONES.desk.height * 0.33 },
+      { x: ZONES.desk.x + ZONES.desk.width * 0.5, y: ZONES.desk.y + ZONES.desk.height * 0.66 },
+      // Meeting zone
+      { x: ZONES.meeting.x + ZONES.meeting.width * 0.5, y: ZONES.meeting.y + ZONES.meeting.height * 0.5 },
+      // Hot desk zone
+      { x: ZONES.hotDesk.x + ZONES.hotDesk.width * 0.33, y: ZONES.hotDesk.y + ZONES.hotDesk.height * 0.5 },
+      { x: ZONES.hotDesk.x + ZONES.hotDesk.width * 0.66, y: ZONES.hotDesk.y + ZONES.hotDesk.height * 0.5 },
+      // Lounge
+      { x: ZONES.lounge.x + ZONES.lounge.width * 0.3, y: ZONES.lounge.y + ZONES.lounge.height * 0.35 },
+      { x: ZONES.lounge.x + ZONES.lounge.width * 0.7, y: ZONES.lounge.y + ZONES.lounge.height * 0.35 },
+    ];
+
+    for (const pos of lightPositions) {
+      const lightG = new Graphics();
+      
+      // Outer glow
+      lightG.circle(pos.x, pos.y, 30);
+      lightG.fill({ color: 0xffd599, alpha: 0.03 });
+      
+      // Middle glow
+      lightG.circle(pos.x, pos.y, 18);
+      lightG.fill({ color: 0xffd599, alpha: 0.06 });
+      
+      // Inner bright
+      lightG.circle(pos.x, pos.y, 8);
+      lightG.fill({ color: 0xffeedd, alpha: 0.15 });
+      
+      // Center
+      lightG.circle(pos.x, pos.y, 4);
+      lightG.fill({ color: 0xffffff, alpha: 0.25 });
+      
+      this.ceilingLights.push({ x: pos.x, y: pos.y, graphics: lightG });
+      this.ambientLayer.addChild(lightG);
+      
+      // Add to glowing objects for animation
+      this.glowingObjects.push({
+        graphics: lightG,
+        baseAlpha: 1,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 0.3,
+        color: 0xffd599,
+      });
+    }
   }
 
   private drawDesk(g: Graphics, x: number, y: number, w: number, h: number): void {
@@ -694,6 +813,10 @@ export class OfficeWorld {
     // Pillow / cushion highlights
     g.roundRect(x + 8, y + (flipped ? h - 14 : 8), 20, 8, 4);
     g.fill({ color: ACCENT_PURPLE, alpha: 0.1 });
+    
+    // Throw pillows
+    g.roundRect(x + w - 30, y + (flipped ? h - 16 : 10), 16, 10, 3);
+    g.fill({ color: 0x80c0a0, alpha: 0.5 });
   }
 
   private drawCoffeeTable(g: Graphics, x: number, y: number, w: number, h: number): void {
@@ -750,6 +873,136 @@ export class OfficeWorld {
     // Dispenser
     g.circle(cx, cy + 10, 2);
     g.fill({ color: ACCENT_CYAN, alpha: 0.5 });
+  }
+
+  private drawCoffeeMachine(g: Graphics, cx: number, cy: number): void {
+    // Shadow
+    g.roundRect(cx - 12, cy + 2, 24, 30, 3);
+    g.fill({ color: 0x000000, alpha: 0.15 });
+    // Machine body
+    g.roundRect(cx - 10, cy, 20, 28, 3);
+    g.fill(0x3a3a3a);
+    g.stroke({ color: 0x5a5a5a, width: 0.8 });
+    // Top section
+    g.roundRect(cx - 8, cy + 2, 16, 8, 2);
+    g.fill({ color: 0x2a2a2a, alpha: 0.8 });
+    // Water reservoir (visible through panel)
+    g.roundRect(cx - 6, cy + 3, 12, 6, 1);
+    g.fill({ color: 0x6090c0, alpha: 0.25 });
+    // Control buttons
+    g.circle(cx - 3, cy + 14, 2);
+    g.fill({ color: 0x40c040, alpha: 0.8 });
+    g.circle(cx + 3, cy + 14, 2);
+    g.fill({ color: 0x606060, alpha: 0.6 });
+    // Drip tray
+    g.roundRect(cx - 7, cy + 22, 14, 4, 1);
+    g.fill({ color: 0x505050, alpha: 0.6 });
+    // Cup area
+    g.roundRect(cx - 5, cy + 18, 10, 4, 1);
+    g.fill({ color: 0x2a2a2a, alpha: 0.4 });
+  }
+
+  private drawWhiteboard(g: Graphics, x: number, y: number): void {
+    g.roundRect(x, y, 70, 45, 4);
+    g.fill({ color: 0x3a3a52, alpha: 0.8 });
+    g.stroke({ color: 0x6a6a8a, width: 1 });
+    // Whiteboard surface
+    g.roundRect(x + 4, y + 4, 62, 37, 2);
+    g.fill({ color: 0xf0f0f0, alpha: 0.06 });
+    // Scribbles - flowchart elements
+    g.roundRect(x + 10, y + 10, 15, 10, 2);
+    g.stroke({ color: 0x4080c0, width: 1, alpha: 0.6 });
+    g.roundRect(x + 35, y + 10, 18, 10, 2);
+    g.stroke({ color: 0x40c080, width: 1, alpha: 0.6 });
+    // Arrow
+    g.moveTo(x + 26, y + 15);
+    g.lineTo(x + 34, y + 15);
+    g.stroke({ color: 0x333333, width: 0.8, alpha: 0.5 });
+    // Text lines
+    g.rect(x + 10, y + 26, 40, 2);
+    g.fill({ color: 0x333333, alpha: 0.3 });
+    g.rect(x + 10, y + 31, 35, 2);
+    g.fill({ color: 0x333333, alpha: 0.25 });
+    // Marker tray
+    g.roundRect(x + 10, y + 42, 50, 4, 2);
+    g.fill({ color: 0x5a5a6a, alpha: 0.5 });
+    // Colored markers
+    const markerColors = [0xff4444, 0x44ff44, 0x4444ff];
+    markerColors.forEach((mc, i) => {
+      g.roundRect(x + 15 + i * 14, y + 42, 8, 3, 1);
+      g.fill({ color: mc, alpha: 0.6 });
+    });
+  }
+
+  private drawPoster(g: Graphics, x: number, y: number, color: number): void {
+    // Shadow
+    g.roundRect(x + 2, y + 2, 40, 55, 3);
+    g.fill({ color: 0x000000, alpha: 0.2 });
+    // Frame
+    g.roundRect(x, y, 40, 55, 3);
+    g.fill({ color: 0x3a3a4a, alpha: 0.9 });
+    g.stroke({ color: 0x5a5a6a, width: 1 });
+    // Poster content
+    g.roundRect(x + 3, y + 3, 34, 49, 2);
+    g.fill({ color, alpha: 0.4 });
+    // Text lines on poster
+    g.rect(x + 8, y + 35, 24, 2);
+    g.fill({ color: 0xffffff, alpha: 0.15 });
+    g.rect(x + 8, y + 40, 20, 2);
+    g.fill({ color: 0xffffff, alpha: 0.1 });
+  }
+
+  private drawClock(g: Graphics, cx: number, cy: number): void {
+    // Shadow
+    g.circle(cx + 1, cy + 1, 14);
+    g.fill({ color: 0x000000, alpha: 0.15 });
+    // Clock body
+    g.circle(cx, cy, 14);
+    g.fill({ color: 0x2a2a3a, alpha: 0.9 });
+    g.stroke({ color: 0x5a5a6a, width: 1 });
+    // Clock face
+    g.circle(cx, cy, 11);
+    g.fill({ color: 0xf0f0f0, alpha: 0.08 });
+    // Hour markers
+    for (let i = 0; i < 12; i++) {
+      const angle = (i * Math.PI * 2) / 12 - Math.PI / 2;
+      const mx = cx + Math.cos(angle) * 9;
+      const my = cy + Math.sin(angle) * 9;
+      g.circle(mx, my, 1);
+      g.fill({ color: 0xaaaaaa, alpha: 0.5 });
+    }
+    // Hour hand
+    g.moveTo(cx, cy);
+    g.lineTo(cx + 4, cy - 3);
+    g.stroke({ color: 0x333333, width: 1.5, alpha: 0.7 });
+    // Minute hand
+    g.moveTo(cx, cy);
+    g.lineTo(cx + 2, cy - 7);
+    g.stroke({ color: 0x555555, width: 1, alpha: 0.6 });
+    // Center dot
+    g.circle(cx, cy, 1.5);
+    g.fill({ color: 0xc04040, alpha: 0.8 });
+  }
+
+  private drawPictureFrame(g: Graphics, x: number, y: number, w: number, h: number, color: number): void {
+    // Shadow
+    g.roundRect(x + 2, y + 2, w, h, 2);
+    g.fill({ color: 0x000000, alpha: 0.15 });
+    // Frame
+    g.roundRect(x, y, w, h, 2);
+    g.fill({ color: 0x5a4a3a, alpha: 0.9 });
+    g.stroke({ color: 0x7a6a5a, width: 1 });
+    // Inner mat
+    g.roundRect(x + 3, y + 3, w - 6, h - 6, 1);
+    g.fill({ color: 0xf0f0e8, alpha: 0.08 });
+    // Picture content (abstract)
+    g.roundRect(x + 5, y + 5, w - 10, h - 10, 1);
+    g.fill({ color, alpha: 0.35 });
+    // Some abstract shapes in picture
+    g.circle(x + w * 0.3, y + h * 0.4, 6);
+    g.fill({ color: 0xffffff, alpha: 0.1 });
+    g.circle(x + w * 0.6, y + h * 0.5, 8);
+    g.fill({ color: 0xffffff, alpha: 0.08 });
   }
 
   // ─── LABELS ───────────────────────────────────────────────
@@ -935,6 +1188,25 @@ export class OfficeWorld {
     }
   }
 
+  private initSteamParticles(): void {
+    // Coffee machine steam
+    const lz = ZONES.lounge;
+    const coffeeMachineX = lz.x + 450;
+    const coffeeMachineY = lz.y + 30;
+    
+    for (let i = 0; i < 8; i++) {
+      this.steamParticles.push({
+        x: coffeeMachineX + (Math.random() - 0.5) * 6,
+        y: coffeeMachineY - 5,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: -0.3 - Math.random() * 0.2,
+        alpha: 0.2 + Math.random() * 0.2,
+        size: 1.5 + Math.random() * 1.5,
+        life: Math.random() * 60,
+      });
+    }
+  }
+
   public toggleGrid(): void {
     this._showGrid = !this._showGrid;
     this.gridLayer.visible = this._showGrid;
@@ -944,8 +1216,10 @@ export class OfficeWorld {
 
   public tick(dt: number): void {
     this.particleGraphics.clear();
+    this.steamGraphics.clear();
     this.ambientPhase += 0.01 * dt;
 
+    // Ambient particles
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -981,6 +1255,40 @@ export class OfficeWorld {
 
       this.particleGraphics.circle(p.x, p.y, p.size);
       this.particleGraphics.fill({ color: p.color, alpha });
+    }
+
+    // Steam particles
+    const lz = ZONES.lounge;
+    const coffeeMachineX = lz.x + 450;
+    const coffeeMachineY = lz.y + 30;
+    
+    for (const sp of this.steamParticles) {
+      sp.x += sp.vx * dt + Math.sin(this.ambientPhase * 3 + sp.life * 0.1) * 0.1;
+      sp.y += sp.vy * dt;
+      sp.life += dt;
+      sp.alpha -= 0.003 * dt;
+      sp.size += 0.02 * dt;
+      
+      // Reset steam when faded or too high
+      if (sp.alpha <= 0 || sp.y < coffeeMachineY - 30) {
+        sp.x = coffeeMachineX + (Math.random() - 0.5) * 6;
+        sp.y = coffeeMachineY - 5;
+        sp.vx = (Math.random() - 0.5) * 0.15;
+        sp.vy = -0.3 - Math.random() * 0.2;
+        sp.alpha = 0.2 + Math.random() * 0.2;
+        sp.size = 1.5 + Math.random() * 1.5;
+        sp.life = 0;
+      }
+      
+      this.steamGraphics.circle(sp.x, sp.y, sp.size);
+      this.steamGraphics.fill({ color: 0xffffff, alpha: Math.max(0, sp.alpha) });
+    }
+
+    // Glowing objects pulse
+    for (const glow of this.glowingObjects) {
+      glow.phase += glow.speed * 0.016 * dt;
+      const pulse = glow.baseAlpha * (0.8 + 0.2 * Math.sin(glow.phase));
+      glow.graphics.alpha = pulse;
     }
 
     // Subtle ambient glow pulse
