@@ -57,8 +57,8 @@ function statusGlowIntensity(status: VisualAgent["status"]): number {
   }
 }
 
-// Height constants for positioning overlays relative to bigger characters
-const CHAR_TOP = 1.55; // Top of 1.4-height character + margin
+// Height constants for positioning overlays relative to characters (1.0 world-unit tall)
+const CHAR_TOP = 1.15; // Top of 1.0-height character + margin
 const NAME_Y = -0.15;  // Below character feet
 
 /** Floating name plate — matches 2D PixiAgent style */
@@ -138,7 +138,7 @@ function StatusIcon({ status }: { status: VisualAgent["status"] }) {
 function ShadowBlob({ opacity = 0.2 }: { opacity?: number }) {
   return (
     <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1, 0.5, 1]}>
-      <circleGeometry args={[0.35, 24]} />
+      <circleGeometry args={[0.25, 24]} />
       <meshBasicMaterial color="#000000" transparent opacity={opacity} depthWrite={false} />
     </mesh>
   );
@@ -547,8 +547,8 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       <group ref={bodyRef}>
         {/* Status emissive glow shell behind sprite */}
         {glowIntensity > 0 && (
-          <mesh ref={glowRef} position={[0, 0.7, -0.05]}>
-            <planeGeometry args={[1.2, 1.2]} />
+          <mesh ref={glowRef} position={[0, 0.5, -0.05]}>
+            <planeGeometry args={[0.9, 0.9]} />
             <meshStandardMaterial
               color={glowColor}
               emissive={glowColor}
@@ -571,12 +571,13 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
             opacity={bodyOpacity}
             tint={isOffline || isPlaceholder || isUnconfirmed ? "#888888" : undefined}
             isActive={agent.status === "thinking" || agent.status === "speaking" || agent.status === "tool_calling" || agent.status === "spawning"}
+            zone={agent.zone}
           />
         </Suspense>
 
         {/* Sub-agent "S" badge */}
         {isSubAgent && !isPlaceholder && (
-          <Html position={[0.3, 1.2, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
+          <Html position={[0.25, 0.9, 0.1]} center transform={false} style={{ pointerEvents: "none" }}>
             <div
               style={{
                 display: "flex",
@@ -607,7 +608,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
 
       {agent.status === "thinking" && <ThinkingIndicator />}
       {agent.status === "tool_calling" && agent.currentTool && (
-        <SkillHologram tool={{ name: agent.currentTool.name }} position={[0.4, 0.7, -0.3]} />
+        <SkillHologram tool={{ name: agent.currentTool.name }} position={[0.35, 0.5, -0.25]} />
       )}
       {agent.status === "error" && <ErrorIndicator />}
 
@@ -626,7 +627,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
       {isSelected && (
         <group>
           <mesh ref={selectionRingRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.35, 0.42, 32]} />
+            <ringGeometry args={[0.25, 0.32, 32]} />
             <meshStandardMaterial
               color="#3b82f6"
               emissive="#3b82f6"
@@ -637,7 +638,7 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
           </mesh>
           {/* Outer glow ring */}
           <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.42, 0.52, 32]} />
+            <ringGeometry args={[0.32, 0.40, 32]} />
             <meshStandardMaterial
               color="#3b82f6"
               emissive="#3b82f6"

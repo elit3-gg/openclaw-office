@@ -30,6 +30,8 @@ interface SpriteCharacterProps {
   tint?: string;
   /** Whether agent is actively working (suppresses idle behaviors) */
   isActive?: boolean;
+  /** Agent's current zone for default facing direction */
+  zone?: string;
 }
 
 /**
@@ -45,6 +47,7 @@ export function SpriteCharacter({
   opacity = 1,
   tint,
   isActive = false,
+  zone = "desk",
 }: SpriteCharacterProps) {
   const spriteRef = useRef<THREE.Sprite>(null);
   const animFrame = useRef(0);
@@ -124,6 +127,11 @@ export function SpriteCharacter({
       const idleFacing = getIdleFacingDirection(idleBehavior.current);
       if (idleFacing !== null) {
         currentDir.current = idleFacing;
+      } else if (!moveDirection) {
+        // Zone-aware default: agents at desks face DOWN (toward viewer)
+        if (zone === "desk" || zone === "hotDesk" || zone === "lounge") {
+          currentDir.current = DIR_DOWN;
+        }
       }
 
       // Typing behavior: rapid frame cycling for "working" animation
@@ -141,7 +149,7 @@ export function SpriteCharacter({
 
     // Apply idle micro-offsets to sprite position
     if (!isWalking && spriteRef.current) {
-      const charHeight = 0.6 * scale;
+      const charHeight = 1.0 * scale;
       spriteRef.current.position.y = charHeight / 2 + idleBehavior.current.offsetY * 0.01;
       spriteRef.current.position.x = idleBehavior.current.offsetX * 0.005;
     }
@@ -155,8 +163,8 @@ export function SpriteCharacter({
     );
   });
 
-  // Character height in 3D world units — big prominent characters
-  const charHeight = 1.4 * scale;
+  // Character height in 3D world units — scaled to match furniture (desk ~waist height)
+  const charHeight = 1.0 * scale;
 
   return (
     <sprite

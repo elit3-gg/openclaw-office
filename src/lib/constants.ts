@@ -1,18 +1,18 @@
 import type { AgentVisualStatus } from "@/gateway/types";
 import i18n from "@/i18n";
 
-export const SVG_WIDTH = 1200;
-export const SVG_HEIGHT = 700;
+export const SVG_WIDTH = 1600;
+export const SVG_HEIGHT = 900;
 
 // Unified office floor plan: one building shell with internal partitions
 export const OFFICE = {
-  x: 30,
-  y: 20,
-  width: SVG_WIDTH - 60,
-  height: SVG_HEIGHT - 40,
+  x: 40,
+  y: 30,
+  width: SVG_WIDTH - 80,
+  height: SVG_HEIGHT - 60,
   wallThickness: 6,
   cornerRadius: 18,
-  corridorWidth: 28,
+  corridorWidth: 40,
 } as const;
 
 const halfW = (OFFICE.width - OFFICE.corridorWidth) / 2;
@@ -99,16 +99,16 @@ export const DEFAULT_MAX_SUB_AGENTS = 8;
 export const FURNITURE = {
   desk: { width: 100, height: 60 },
   chair: { size: 30 },
-  meetingTable: { minRadius: 60, maxRadius: 100 },
-  sofa: { width: 110, height: 50 },
+  meetingTable: { minRadius: 70, maxRadius: 110 },
+  sofa: { width: 130, height: 55 },
   plant: { width: 28, height: 36 },
   coffeeCup: { size: 14 },
 } as const;
 
 // Desk unit (Desk + Chair + AgentAvatar)
 export const DESK_UNIT = {
-  width: 150,
-  height: 120,
+  width: 180,
+  height: 140,
   avatarRadius: 36,
   avatarOffsetY: -8,
 } as const;
@@ -122,11 +122,11 @@ export const AVATAR = {
 } as const;
 
 // 3D scene constants
-// SVG 1200×700 maps to 3D building 16×12 world units
+// SVG 1600×900 maps to 3D building 16×12 world units
 export const SCALE_X_2D_TO_3D = 16 / SVG_WIDTH;
 export const SCALE_Z_2D_TO_3D = 12 / SVG_HEIGHT;
 export const SCALE_2D_TO_3D = 0.01; // legacy — kept for tests
-export const DESK_HEIGHT = 0.42;
+export const DESK_HEIGHT = 0.48;
 export const CHARACTER_Y = 0;
-export const MEETING_TABLE_RADIUS = 1.2;
-export const MEETING_SEAT_RADIUS = 1.7;
+export const MEETING_TABLE_RADIUS = 1.4;
+export const MEETING_SEAT_RADIUS = 2.1;

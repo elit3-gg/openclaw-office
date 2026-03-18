@@ -4,12 +4,51 @@ import { useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
-const DESK_HEIGHT = 0.42;
+const DESK_HEIGHT = 0.48;
 
 // ═══════════════════════════════════════════════════════════
 // Richer 3D Office Environment
 // Detailed furniture with creative geometry combinations
 // ═══════════════════════════════════════════════════════════
+
+/** Animated monitor screen with subtle color cycling */
+function AnimatedScreen({
+  position,
+  size,
+  seed = 0,
+}: {
+  position: [number, number, number];
+  size: [number, number];
+  seed?: number;
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (!meshRef.current) return;
+    const t = state.clock.elapsedTime;
+    const mat = meshRef.current.material as THREE.MeshStandardMaterial;
+    // Cycle hue subtly based on time + seed for per-monitor variation
+    const hue = (0.55 + Math.sin(t * 0.3 + seed) * 0.08 + Math.sin(t * 0.7 + seed * 2) * 0.04);
+    const col = new THREE.Color().setHSL(hue, 0.35, 0.75);
+    const emCol = new THREE.Color().setHSL(hue, 0.5, 0.5);
+    mat.color.lerp(col, 0.1);
+    mat.emissive.lerp(emCol, 0.1);
+    mat.emissiveIntensity = 0.3 + Math.sin(t * 1.5 + seed) * 0.08;
+  });
+
+  return (
+    <mesh ref={meshRef} position={position}>
+      <planeGeometry args={size} />
+      <meshStandardMaterial
+        color="#d0e8ff"
+        emissive="#90c0f0"
+        emissiveIntensity={0.3}
+        transparent
+        opacity={0.9}
+      />
+    </mesh>
+  );
+}
 
 function Workstation({
   position,
@@ -27,13 +66,13 @@ function Workstation({
       </mesh>
       {/* Desk legs — metal gray */}
       {[
-        [-0.5, 0.2, -0.22],
-        [0.5, 0.2, -0.22],
-        [-0.5, 0.2, 0.22],
-        [0.5, 0.2, 0.22],
+        [-0.5, DESK_HEIGHT / 2, -0.22],
+        [0.5, DESK_HEIGHT / 2, -0.22],
+        [-0.5, DESK_HEIGHT / 2, 0.22],
+        [0.5, DESK_HEIGHT / 2, 0.22],
       ].map((pos, i) => (
         <mesh key={`leg-${i}`} position={pos as [number, number, number]} castShadow>
-          <boxGeometry args={[0.04, 0.4, 0.04]} />
+          <boxGeometry args={[0.04, DESK_HEIGHT, 0.04]} />
           <meshStandardMaterial color="#8898a8" roughness={0.5} metalness={0.35} />
         </mesh>
       ))}
@@ -55,23 +94,26 @@ function Workstation({
           <boxGeometry args={[0.55, 0.32, 0.02]} />
           <meshStandardMaterial color="#3a4550" roughness={0.3} metalness={0.15} />
         </mesh>
-        {/* Screen glow — bright blue */}
-        <mesh position={[0, 0.35, 0.015]}>
-          <planeGeometry args={[0.48, 0.26]} />
-          <meshStandardMaterial
-            color="#d0e8ff"
-            emissive="#90c0f0"
-            emissiveIntensity={0.3}
-            transparent
-            opacity={0.9}
-          />
-        </mesh>
+        {/* Screen glow — animated content with subtle color shift */}
+        <AnimatedScreen position={[0, 0.35, 0.015]} size={[0.48, 0.26]} seed={position[0] * 7 + position[2] * 13} />
       </group>
 
-      {/* Keyboard */}
+      {/* Keyboard with subtle underglow */}
       <mesh position={[0, DESK_HEIGHT + 0.025, 0.1]}>
         <boxGeometry args={[0.3, 0.01, 0.1]} />
         <meshStandardMaterial color="#aab0b8" roughness={0.6} metalness={0.15} />
+      </mesh>
+      {/* Keyboard backlight glow */}
+      <mesh position={[0, DESK_HEIGHT + 0.02, 0.1]}>
+        <planeGeometry args={[0.28, 0.08]} />
+        <meshStandardMaterial
+          color="#60a0ff"
+          emissive="#4080d0"
+          emissiveIntensity={0.15}
+          transparent
+          opacity={0.25}
+          depthWrite={false}
+        />
       </mesh>
     </group>
   );
@@ -94,26 +136,26 @@ function OfficeChair({
         <meshStandardMaterial color="#7a8a9a" roughness={0.4} metalness={0.5} />
       </mesh>
       {/* Pole */}
-      <mesh position={[0, 0.18, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.22, 8]} />
+      <mesh position={[0, 0.2, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.26, 8]} />
         <meshStandardMaterial color="#8898a8" metalness={0.6} roughness={0.35} />
       </mesh>
       {/* Seat */}
-      <mesh position={[0, 0.3, 0]} castShadow>
+      <mesh position={[0, 0.35, 0]} castShadow>
         <boxGeometry args={[0.28, 0.04, 0.28]} />
         <meshStandardMaterial color={color} roughness={0.8} />
       </mesh>
       {/* Back */}
-      <mesh position={[0, 0.5, -0.12]} castShadow>
-        <boxGeometry args={[0.26, 0.36, 0.03]} />
+      <mesh position={[0, 0.56, -0.12]} castShadow>
+        <boxGeometry args={[0.26, 0.38, 0.03]} />
         <meshStandardMaterial color={color} roughness={0.8} />
       </mesh>
       {/* Armrests */}
-      <mesh position={[0.15, 0.38, 0]}>
+      <mesh position={[0.15, 0.44, 0]}>
         <boxGeometry args={[0.03, 0.04, 0.2]} />
         <meshStandardMaterial color="#7a8a9a" roughness={0.5} metalness={0.35} />
       </mesh>
-      <mesh position={[-0.15, 0.38, 0]}>
+      <mesh position={[-0.15, 0.44, 0]}>
         <boxGeometry args={[0.03, 0.04, 0.2]} />
         <meshStandardMaterial color="#7a8a9a" roughness={0.5} metalness={0.35} />
       </mesh>
@@ -695,17 +737,31 @@ function PendantLight({ position, on = true }: { position: [number, number, numb
           opacity={0.9}
         />
       </mesh>
-      {/* Point light */}
+      {/* Point light — stronger pools of light on work surfaces */}
       {on && (
-        <pointLight
-          ref={lightRef}
-          position={[0, -0.4, 0]}
-          intensity={0.8}
-          distance={3}
-          decay={2}
-          color="#ffd599"
-          castShadow={false}
-        />
+        <>
+          <pointLight
+            ref={lightRef}
+            position={[0, -0.4, 0]}
+            intensity={1.2}
+            distance={4.5}
+            decay={2}
+            color="#ffd599"
+            castShadow={false}
+          />
+          {/* Spot light cone for visible light pool on floor */}
+          <spotLight
+            position={[0, -0.3, 0]}
+            angle={0.6}
+            penumbra={0.8}
+            intensity={0.6}
+            distance={4}
+            decay={2}
+            color="#fff0d0"
+            castShadow={false}
+            target-position={[0, -3, 0]}
+          />
+        </>
       )}
     </group>
   );
@@ -908,70 +964,72 @@ export function OfficeLayout3D() {
       <ZoneSign3D position={[3.5, 2.2, 6.5]} text="HOT DESKS" color="#f97316" />
       <ZoneSign3D position={[12, 2.2, 6.5]} text="LOUNGE" color="#22c55e" />
 
-      {/* === Desk Zone — 2 rows × 3 columns === */}
+      {/* === Desk Zone — 2 rows × 3 columns (wider spacing) === */}
       {[
-        { pos: [1.8, 0, 1.8] as [number, number, number], rot: 0 },
-        { pos: [3.5, 0, 1.8] as [number, number, number], rot: 0 },
-        { pos: [5.2, 0, 1.8] as [number, number, number], rot: 0 },
-        { pos: [1.8, 0, 3.5] as [number, number, number], rot: Math.PI },
-        { pos: [3.5, 0, 3.5] as [number, number, number], rot: Math.PI },
-        { pos: [5.2, 0, 3.5] as [number, number, number], rot: Math.PI },
+        { pos: [1.5, 0, 1.6] as [number, number, number], rot: 0, chairRot: 0.1 },
+        { pos: [3.5, 0, 1.6] as [number, number, number], rot: 0, chairRot: -0.15 },
+        { pos: [5.5, 0, 1.6] as [number, number, number], rot: 0, chairRot: 0.2 },
+        { pos: [1.5, 0, 3.8] as [number, number, number], rot: Math.PI, chairRot: -0.1 },
+        { pos: [3.5, 0, 3.8] as [number, number, number], rot: Math.PI, chairRot: 0.25 },
+        { pos: [5.5, 0, 3.8] as [number, number, number], rot: Math.PI, chairRot: -0.2 },
       ].map((ws, i) => (
         <group key={`desk-ws-${i}`}>
           <Workstation position={ws.pos} rotation={ws.rot} />
           <OfficeChair
-            position={[ws.pos[0], 0, ws.pos[2] + (ws.rot === 0 ? 0.45 : -0.45)]}
-            rotation={ws.rot}
+            position={[ws.pos[0], 0, ws.pos[2] + (ws.rot === 0 ? 0.5 : -0.5)]}
+            rotation={ws.rot + ws.chairRot}
             color={i % 2 === 0 ? "#4a5568" : "#3a5068"}
           />
         </group>
       ))}
 
-      {/* === Meeting Zone — hexagonal table + chairs + whiteboard === */}
-      <MeetingTable position={[12, 0, 2.8]} />
+      {/* === Meeting Zone — hexagonal table + chairs + whiteboard (more spacious) === */}
+      <MeetingTable position={[12, 0, 2.8]} radius={1.4} />
       {Array.from({ length: 6 }).map((_, i) => {
         const angle = (Math.PI * 2 * i) / 6 - Math.PI / 2;
-        const r = 1.7;
+        const r = 2.1;
+        // Slight random-ish rotation offsets per chair for natural feel
+        const chairJitter = [0.12, -0.08, 0.15, -0.1, 0.05, -0.18][i];
         return (
           <OfficeChair
             key={`meeting-chair-${i}`}
             position={[12 + Math.cos(angle) * r, 0, 2.8 + Math.sin(angle) * r]}
-            rotation={angle + Math.PI}
+            rotation={angle + Math.PI + chairJitter}
             color="#3a6080"
           />
         );
       })}
       {/* Whiteboard in meeting zone */}
-      <Whiteboard position={[14.5, 0, 1.2]} rotation={Math.PI} />
+      <Whiteboard position={[14.8, 0, 0.8]} rotation={Math.PI} />
 
-      {/* === Hot Desk Zone — 2 rows × 3 columns === */}
+      {/* === Hot Desk Zone — 2 rows × 3 columns (wider spacing) === */}
       {[
-        { pos: [1.8, 0, 7.8] as [number, number, number], rot: 0 },
-        { pos: [3.5, 0, 7.8] as [number, number, number], rot: 0 },
-        { pos: [5.2, 0, 7.8] as [number, number, number], rot: 0 },
-        { pos: [1.8, 0, 9.8] as [number, number, number], rot: Math.PI },
-        { pos: [3.5, 0, 9.8] as [number, number, number], rot: Math.PI },
-        { pos: [5.2, 0, 9.8] as [number, number, number], rot: Math.PI },
+        { pos: [1.5, 0, 7.6] as [number, number, number], rot: 0, chairRot: -0.12 },
+        { pos: [3.5, 0, 7.6] as [number, number, number], rot: 0, chairRot: 0.18 },
+        { pos: [5.5, 0, 7.6] as [number, number, number], rot: 0, chairRot: -0.08 },
+        { pos: [1.5, 0, 10.0] as [number, number, number], rot: Math.PI, chairRot: 0.15 },
+        { pos: [3.5, 0, 10.0] as [number, number, number], rot: Math.PI, chairRot: -0.22 },
+        { pos: [5.5, 0, 10.0] as [number, number, number], rot: Math.PI, chairRot: 0.1 },
       ].map((ws, i) => (
         <group key={`hotdesk-ws-${i}`}>
           <Workstation position={ws.pos} rotation={ws.rot} />
           <OfficeChair
-            position={[ws.pos[0], 0, ws.pos[2] + (ws.rot === 0 ? 0.45 : -0.45)]}
-            rotation={ws.rot}
+            position={[ws.pos[0], 0, ws.pos[2] + (ws.rot === 0 ? 0.5 : -0.5)]}
+            rotation={ws.rot + ws.chairRot}
             color="#6a5a4a"
           />
         </group>
       ))}
 
-      {/* === Lounge Zone — sofas, coffee area, rug === */}
+      {/* === Lounge Zone — sofas, coffee area, rug (more spacious) === */}
       {/* Area rug under lounge seating */}
-      <Rug position={[11.5, 0.008, 8.5]} size={[3.5, 2.5]} color="#3a2a48" />
-      
-      <Sofa position={[10.5, 0, 7.8]} rotation={0} />
-      <Sofa position={[13, 0, 7.8]} rotation={0} />
-      <Sofa position={[10.5, 0, 8.8]} rotation={Math.PI} />
-      <CoffeeTable position={[11.8, 0, 8.3]} />
-      <Sofa position={[14.5, 0, 8.5]} rotation={Math.PI / 2} />
+      <Rug position={[11.8, 0.008, 8.5]} size={[4.5, 3.2]} color="#3a2a48" />
+
+      <Sofa position={[10.2, 0, 7.5]} rotation={0} />
+      <Sofa position={[13.2, 0, 7.5]} rotation={0} />
+      <Sofa position={[10.2, 0, 9.5]} rotation={Math.PI} />
+      <CoffeeTable position={[11.8, 0, 8.5]} />
+      <Sofa position={[14.8, 0, 8.5]} rotation={Math.PI / 2} />
 
       {/* === Coffee Machine & Water Cooler === */}
       <CoffeeMachine position={[9.5, 0, 7.2]} />

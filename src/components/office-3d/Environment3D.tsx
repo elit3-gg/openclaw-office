@@ -229,6 +229,89 @@ function ActivityAmbientLight() {
   return <pointLight ref={lightRef} position={[8, 3, 6]} intensity={0.1} distance={20} decay={1} />;
 }
 
+/** Gradient sky dome for atmospheric background */
+function SkyDome({ isDark }: { isDark: boolean }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+
+  const uniforms = useMemo(
+    () => ({
+      uTopColor: { value: isDark ? new THREE.Color("#050510") : new THREE.Color("#7eb8e0") },
+      uHorizonColor: { value: isDark ? new THREE.Color("#1a1840") : new THREE.Color("#c8ddf0") },
+      uExponent: { value: isDark ? 0.8 : 0.6 },
+    }),
+    [],
+  );
+
+  useFrame(() => {
+    if (!matRef.current) return;
+    const targetTop = isDark ? new THREE.Color("#050510") : new THREE.Color("#7eb8e0");
+    const targetHorizon = isDark ? new THREE.Color("#1a1840") : new THREE.Color("#c8ddf0");
+    matRef.current.uniforms.uTopColor.value.lerp(targetTop, 0.02);
+    matRef.current.uniforms.uHorizonColor.value.lerp(targetHorizon, 0.02);
+    matRef.current.uniforms.uExponent.value = THREE.MathUtils.lerp(
+      matRef.current.uniforms.uExponent.value,
+      isDark ? 0.8 : 0.6,
+      0.02,
+    );
+  });
+
+  return (
+    <mesh ref={meshRef} scale={[-1, 1, 1]}>
+      <sphereGeometry args={[80, 32, 16]} />
+      <shaderMaterial
+        ref={matRef}
+        uniforms={uniforms}
+        vertexShader={`
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPos.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `}
+        fragmentShader={`
+          uniform vec3 uTopColor;
+          uniform vec3 uHorizonColor;
+          uniform float uExponent;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition).y;
+            float t = max(pow(max(h, 0.0), uExponent), 0.0);
+            gl_FragColor = vec4(mix(uHorizonColor, uTopColor, t), 1.0);
+          }
+        `}
+        side={THREE.BackSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+/** Accent zone spotlight for visible light pools */
+function ZoneAccentLight({
+  position,
+  color,
+  intensity = 0.4,
+}: {
+  position: [number, number, number];
+  color: string;
+  intensity?: number;
+}) {
+  return (
+    <spotLight
+      position={position}
+      angle={0.5}
+      penumbra={0.9}
+      intensity={intensity}
+      distance={6}
+      decay={2}
+      color={color}
+      castShadow={false}
+    />
+  );
+}
+
 export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMode }) {
   const isDark = theme === "dark";
   const floorColor = isDark ? "#2d2d44" : "#d4dbe6";
@@ -241,59 +324,76 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
       <ThemeLighting theme={theme} />
       <ActivityAmbientLight />
 
+      {/* Gradient sky dome — atmospheric background */}
+      <SkyDome isDark={isDark} />
+
       {/* Atmospheric fog — exponential in dark mode for depth falloff */}
       {isDark ? (
-        <fogExp2 attach="fog" args={["#0f1729", 0.015]} />
+        <fogExp2 attach="fog" args={["#0f1729", 0.012]} />
       ) : (
-        <fog attach="fog" args={["#e8ecf2", 20, 60]} />
+        <fog attach="fog" args={["#e8ecf2", 25, 70]} />
       )}
 
       {/* Ambient particles */}
       <AmbientParticles theme={theme} />
 
+      {/* === Zone accent spotlights — visible light pools === */}
+      {/* Cool blue accent for desk zones */}
+      <ZoneAccentLight position={[3.5, 3.5, 2.8]} color="#4080c0" intensity={0.5} />
+      <ZoneAccentLight position={[3.5, 3.5, 9]} color="#4080c0" intensity={0.4} />
+      {/* Warm accent for lounge */}
+      <ZoneAccentLight position={[12, 3.5, 9]} color="#ff9960" intensity={0.5} />
+      {/* Purple accent for meeting */}
+      <ZoneAccentLight position={[12, 3.5, 2.8]} color="#9060d0" intensity={0.4} />
+
       {/* === Ground — open playground, no walls === */}
-      
+
       {/* Extended ground plane (infinite feel) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[8, -0.1, 6]} receiveShadow>
-        <planeGeometry args={[40, 30]} />
+        <planeGeometry args={[50, 40]} />
         <meshStandardMaterial color={isDark ? "#0d0d1a" : "#b0b8c8"} roughness={0.95} />
       </mesh>
 
       {/* Main platform (raised slightly) */}
       <mesh position={[8, -0.02, 6]}>
-        <boxGeometry args={[17, 0.04, 13]} />
+        <boxGeometry args={[18, 0.04, 14]} />
         <meshStandardMaterial color={platformColor} roughness={0.8} />
       </mesh>
 
-      {/* Floor surface */}
+      {/* Floor surface — subtle reflectivity */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[8, 0.01, 6]} receiveShadow>
-        <planeGeometry args={[16, 12]} />
-        <meshStandardMaterial color={floorColor} roughness={0.4} metalness={0.05} envMapIntensity={0.3} />
+        <planeGeometry args={[17, 13]} />
+        <meshStandardMaterial
+          color={floorColor}
+          roughness={0.3}
+          metalness={0.08}
+          envMapIntensity={isDark ? 0.5 : 0.3}
+        />
       </mesh>
 
-      {/* Floor grid */}
-      <gridHelper args={[16, 16, gridColor1, gridColor2]} position={[8, 0.02, 6]} />
+      {/* Floor grid — larger for spacious feel */}
+      <gridHelper args={[18, 18, gridColor1, gridColor2]} position={[8, 0.02, 6]} />
 
-      {/* === Zone floor tints (no walls, just colored ground areas) === */}
+      {/* === Zone floor tints — more visible but tasteful === */}
       {/* Desk zone */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[3.5, 0.015, 2.8]} receiveShadow>
-        <planeGeometry args={[6.5, 5]} />
-        <meshStandardMaterial color={isDark ? "#3b82f6" : "#4a90d9"} transparent opacity={isDark ? 0.08 : 0.12} roughness={0.85} />
+        <planeGeometry args={[7, 5.5]} />
+        <meshStandardMaterial color={isDark ? "#3b82f6" : "#4a90d9"} transparent opacity={isDark ? 0.12 : 0.16} roughness={0.85} />
       </mesh>
       {/* Meeting zone */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[12, 0.015, 2.8]} receiveShadow>
-        <planeGeometry args={[6.5, 5]} />
-        <meshStandardMaterial color={isDark ? "#a855f7" : "#9060c0"} transparent opacity={isDark ? 0.08 : 0.12} roughness={0.85} />
+        <planeGeometry args={[7, 5.5]} />
+        <meshStandardMaterial color={isDark ? "#a855f7" : "#9060c0"} transparent opacity={isDark ? 0.12 : 0.16} roughness={0.85} />
       </mesh>
       {/* Hot desk zone */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[3.5, 0.015, 9]} receiveShadow>
-        <planeGeometry args={[6.5, 5]} />
-        <meshStandardMaterial color={isDark ? "#f97316" : "#d08030"} transparent opacity={isDark ? 0.08 : 0.12} roughness={0.85} />
+        <planeGeometry args={[7, 5.5]} />
+        <meshStandardMaterial color={isDark ? "#f97316" : "#d08030"} transparent opacity={isDark ? 0.12 : 0.16} roughness={0.85} />
       </mesh>
       {/* Lounge zone */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[12, 0.015, 9]} receiveShadow>
-        <planeGeometry args={[6.5, 5]} />
-        <meshStandardMaterial color={isDark ? "#22c55e" : "#40a060"} transparent opacity={isDark ? 0.08 : 0.12} roughness={0.85} />
+        <planeGeometry args={[7, 5.5]} />
+        <meshStandardMaterial color={isDark ? "#22c55e" : "#40a060"} transparent opacity={isDark ? 0.12 : 0.16} roughness={0.85} />
       </mesh>
 
       {/* === Zone edge glow lines (replacing walls) === */}
@@ -306,12 +406,12 @@ export function Environment3D({ theme = "dark" as ThemeMode }: { theme?: ThemeMo
       <ZoneEdgeGlow position={[12, 0.03, 5.8]} length={7.5} axis="x" />
 
       {/* === Platform edge accent === */}
-      <mesh position={[8, 0.01, -0.5]}>
-        <boxGeometry args={[17, 0.02, 0.04]} />
+      <mesh position={[8, 0.01, -0.8]}>
+        <boxGeometry args={[18, 0.02, 0.04]} />
         <meshStandardMaterial color="#7c6ff5" emissive="#7c6ff5" emissiveIntensity={0.2} transparent opacity={0.5} />
       </mesh>
-      <mesh position={[8, 0.01, 12.5]}>
-        <boxGeometry args={[17, 0.02, 0.04]} />
+      <mesh position={[8, 0.01, 12.8]}>
+        <boxGeometry args={[18, 0.02, 0.04]} />
         <meshStandardMaterial color="#7c6ff5" emissive="#7c6ff5" emissiveIntensity={0.2} transparent opacity={0.5} />
       </mesh>
     </group>

@@ -30,8 +30,8 @@ const SHEET_COLS = 4;
 const ANIM_SPEED = 0.15;
 const LERP_SPEED = 0.08;
 
-// Display scale — 2.2x makes characters prominent like Gather.town
-const DISPLAY_SCALE = 2.2;
+// Display scale — 1.5x keeps characters proportional to furniture
+const DISPLAY_SCALE = 1.5;
 const DISPLAY_SIZE = FRAME_SIZE * DISPLAY_SCALE;
 
 // Direction rows in spritesheet
@@ -107,6 +107,7 @@ export class PixiAgent {
   // Idle behavior
   private idleBehavior: IdleBehaviorState = createIdleBehaviorState();
   private lastStatus: string = "idle";
+  private _zone: string = "desk";
 
   // Walk bob
   private walkBobPhase: number = 0;
@@ -145,7 +146,7 @@ export class PixiAgent {
     // Drop shadow (oval under character)
     this.shadow = new Graphics();
     this.shadow.zIndex = 1;
-    this.shadow.ellipse(0, 0, 16, 6);
+    this.shadow.ellipse(0, 0, 12, 4);
     this.shadow.fill({ color: 0x000000, alpha: 0.25 });
     this.container.addChild(this.shadow);
 
@@ -317,6 +318,9 @@ export class PixiAgent {
     }
 
     this.isWalking = agent.movement !== null;
+
+    // Track zone for idle facing direction
+    this._zone = agent.zone;
   }
 
   private updateNameBackground(): void {
@@ -348,10 +352,10 @@ export class PixiAgent {
 
     this.statusRing.clear();
     // Glow ellipse under the character
-    this.statusRing.ellipse(0, 0, 22, 8);
+    this.statusRing.ellipse(0, 0, 16, 6);
     this.statusRing.fill({ color: hex, alpha: 0.15 });
     // Inner ring
-    this.statusRing.ellipse(0, 0, 18, 6);
+    this.statusRing.ellipse(0, 0, 13, 5);
     this.statusRing.stroke({ color: hex, width: 1, alpha: 0.3 });
   }
 
@@ -377,7 +381,7 @@ export class PixiAgent {
     text.anchor.set(0.5, 0.5);
     this.subAgentBadge.addChild(text);
 
-    this.subAgentBadge.x = 20;
+    this.subAgentBadge.x = 14;
     this.subAgentBadge.y = -DISPLAY_SIZE - 2;
     this.container.addChild(this.subAgentBadge);
   }
@@ -492,13 +496,13 @@ export class PixiAgent {
 
     const alpha = 0.25 + 0.12 * Math.sin(this.glowPhase);
     // Outer glow
-    this.selectionGlow.ellipse(0, 0, 30, 12);
+    this.selectionGlow.ellipse(0, 0, 22, 9);
     this.selectionGlow.fill({ color: 0x60a5fa, alpha: alpha * 0.6 });
     // Ring
-    this.selectionGlow.ellipse(0, 0, 26, 10);
+    this.selectionGlow.ellipse(0, 0, 19, 7);
     this.selectionGlow.stroke({ color: 0x60a5fa, width: 2, alpha: 0.6 });
     // Inner bright ring
-    this.selectionGlow.ellipse(0, 0, 22, 8);
+    this.selectionGlow.ellipse(0, 0, 16, 6);
     this.selectionGlow.stroke({ color: 0x93c5fd, width: 1, alpha: 0.4 });
   }
 
@@ -582,10 +586,19 @@ export class PixiAgent {
           }
         }
 
-        // Idle facing (fallback)
+        // Idle facing (fallback) — zone-aware
         if (facingDir === null) {
           const idleFacing = getIdleFacingDirection(this.idleBehavior);
-          facingDir = idleFacing !== null ? idleFacing : this.currentDir;
+          if (idleFacing !== null) {
+            facingDir = idleFacing;
+          } else if (this._zone === "desk" || this._zone === "hotDesk") {
+            // Agents at desks face DOWN (toward viewer/monitor)
+            facingDir = DIR_DOWN;
+          } else if (this._zone === "lounge") {
+            facingDir = DIR_DOWN;
+          } else {
+            facingDir = this.currentDir;
+          }
         }
 
         const frameIdx = facingDir * SHEET_COLS + 1;
@@ -620,9 +633,9 @@ export class PixiAgent {
       const pulseAlpha = 0.15 + 0.08 * Math.sin(this.glowPhase * 2);
       const hex = STATUS_HEX[this.lastStatus] ?? 0x6b7280;
       this.statusRing.clear();
-      this.statusRing.ellipse(0, 0, 22 + Math.sin(this.glowPhase * 2) * 2, 8);
+      this.statusRing.ellipse(0, 0, 16 + Math.sin(this.glowPhase * 2) * 2, 6);
       this.statusRing.fill({ color: hex, alpha: pulseAlpha });
-      this.statusRing.ellipse(0, 0, 18, 6);
+      this.statusRing.ellipse(0, 0, 13, 5);
       this.statusRing.stroke({ color: hex, width: 1, alpha: 0.3 });
     }
 
@@ -641,9 +654,9 @@ export class PixiAgent {
       const hex = STATUS_HEX[this.lastStatus] ?? 0x6b7280;
       const flashAlpha = 0.15 + 0.35 * eased;
       this.statusRing.clear();
-      this.statusRing.ellipse(0, 0, 22 + 4 * eased, 8 + 2 * eased);
+      this.statusRing.ellipse(0, 0, 16 + 4 * eased, 6 + 2 * eased);
       this.statusRing.fill({ color: hex, alpha: flashAlpha });
-      this.statusRing.ellipse(0, 0, 18, 6);
+      this.statusRing.ellipse(0, 0, 13, 5);
       this.statusRing.stroke({ color: hex, width: 1 + eased, alpha: 0.3 + 0.4 * eased });
     } else {
       // Reset scale to normal

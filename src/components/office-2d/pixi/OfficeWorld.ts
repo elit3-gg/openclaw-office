@@ -241,15 +241,34 @@ export class OfficeWorld {
 
     // Deep space background extending beyond the office
     bg.rect(-100, -100, SVG_WIDTH + 200, SVG_HEIGHT + 200);
-    bg.fill(0x0d0d1a);
+    bg.fill(0x0a0e1a);
 
-    // Subtle starfield / dust motes in the void
-    for (let i = 0; i < 120; i++) {
+    // Radial vignette: lighter center, darker edges
+    const cx = SVG_WIDTH / 2;
+    const cy = SVG_HEIGHT / 2;
+    // Inner lighter zone
+    bg.ellipse(cx, cy, SVG_WIDTH * 0.45, SVG_HEIGHT * 0.45);
+    bg.fill({ color: 0x141828, alpha: 0.35 });
+    bg.ellipse(cx, cy, SVG_WIDTH * 0.3, SVG_HEIGHT * 0.3);
+    bg.fill({ color: 0x181c2e, alpha: 0.2 });
+    // Dark vignette edges (top/bottom strips)
+    bg.rect(-100, -100, SVG_WIDTH + 200, 120);
+    bg.fill({ color: 0x000008, alpha: 0.25 });
+    bg.rect(-100, SVG_HEIGHT - 20, SVG_WIDTH + 200, 120);
+    bg.fill({ color: 0x000008, alpha: 0.25 });
+    // Left/right edge darkening
+    bg.rect(-100, -100, 120, SVG_HEIGHT + 200);
+    bg.fill({ color: 0x000008, alpha: 0.2 });
+    bg.rect(SVG_WIDTH - 20, -100, 120, SVG_HEIGHT + 200);
+    bg.fill({ color: 0x000008, alpha: 0.2 });
+
+    // Increased ambient starfield / dust motes in the void
+    for (let i = 0; i < 200; i++) {
       const x = -50 + Math.random() * (SVG_WIDTH + 100);
       const y = -50 + Math.random() * (SVG_HEIGHT + 100);
       const r = 0.3 + Math.random() * 0.8;
       bg.circle(x, y, r);
-      bg.fill({ color: 0xffffff, alpha: 0.02 + Math.random() * 0.04 });
+      bg.fill({ color: 0xffffff, alpha: 0.02 + Math.random() * 0.05 });
     }
 
     this.backgroundLayer.addChild(bg);
@@ -346,48 +365,81 @@ export class OfficeWorld {
 
       // Zone-specific floor texture
       if (key === "lounge") {
-        // Carpet pattern — circular dots
-        for (let py = zone.y + 8; py < zone.y + zone.height; py += 16) {
-          for (let px = zone.x + 8; px < zone.x + zone.width; px += 16) {
-            g.circle(px, py, 1);
-            g.fill({ color: SOFA_PRIMARY, alpha: 0.08 });
+        // Warm carpet dots (denser pattern)
+        for (let py = zone.y + 6; py < zone.y + zone.height; py += 12) {
+          for (let px = zone.x + 6; px < zone.x + zone.width; px += 12) {
+            const offset = (Math.floor(py / 12) % 2) * 6;
+            g.circle(px + offset, py, 1.2);
+            g.fill({ color: SOFA_PRIMARY, alpha: 0.06 + Math.random() * 0.04 });
           }
         }
 
         // Warm area rug in center
-        const rugX = zone.x + zone.width * 0.15;
-        const rugY = zone.y + zone.height * 0.15;
-        const rugW = zone.width * 0.7;
+        const rugX = zone.x + zone.width * 0.12;
+        const rugY = zone.y + zone.height * 0.12;
+        const rugW = zone.width * 0.6;
         const rugH = zone.height * 0.35;
-        g.roundRect(rugX, rugY, rugW, rugH, 8);
+        g.roundRect(rugX, rugY, rugW, rugH, 10);
         g.fill({ color: 0x3a2a48, alpha: 0.4 });
-        // Rug border
-        g.roundRect(rugX + 3, rugY + 3, rugW - 6, rugH - 6, 6);
+        // Rug border (double line)
+        g.roundRect(rugX + 3, rugY + 3, rugW - 6, rugH - 6, 8);
         g.stroke({ color: ACCENT_PURPLE, width: 0.5, alpha: 0.15 });
+        g.roundRect(rugX + 6, rugY + 6, rugW - 12, rugH - 12, 6);
+        g.stroke({ color: ACCENT_PURPLE, width: 0.3, alpha: 0.1 });
         // Rug center pattern
-        g.circle(rugX + rugW / 2, rugY + rugH / 2, 25);
+        g.circle(rugX + rugW / 2, rugY + rugH / 2, 30);
         g.stroke({ color: 0x7a6aaa, width: 1, alpha: 0.12 });
-        g.circle(rugX + rugW / 2, rugY + rugH / 2, 15);
+        g.circle(rugX + rugW / 2, rugY + rugH / 2, 20);
+        g.stroke({ color: 0x7a6aaa, width: 0.5, alpha: 0.08 });
+        g.circle(rugX + rugW / 2, rugY + rugH / 2, 12);
         g.fill({ color: 0x5a4a7a, alpha: 0.15 });
 
-      } else if (key === "desk" || key === "hotDesk") {
-        // Subtle tech grid for work areas
-        for (let py = zone.y; py < zone.y + zone.height; py += 32) {
-          g.rect(zone.x, py, zone.width, 0.3);
-          g.fill({ color: ACCENT_BLUE, alpha: 0.02 });
+      } else if (key === "desk") {
+        // Blueprint-style grid lines (faint blue)
+        for (let py = zone.y; py < zone.y + zone.height; py += 24) {
+          g.rect(zone.x, py, zone.width, 0.4);
+          g.fill({ color: 0x4080cc, alpha: 0.04 });
         }
-        for (let px = zone.x; px < zone.x + zone.width; px += 32) {
-          g.rect(px, zone.y, 0.3, zone.height);
-          g.fill({ color: ACCENT_BLUE, alpha: 0.02 });
+        for (let px = zone.x; px < zone.x + zone.width; px += 24) {
+          g.rect(px, zone.y, 0.4, zone.height);
+          g.fill({ color: 0x4080cc, alpha: 0.04 });
+        }
+        // Subtle major grid every 96px
+        for (let py = zone.y; py < zone.y + zone.height; py += 96) {
+          g.rect(zone.x, py, zone.width, 0.6);
+          g.fill({ color: 0x4080cc, alpha: 0.06 });
+        }
+        for (let px = zone.x; px < zone.x + zone.width; px += 96) {
+          g.rect(px, zone.y, 0.6, zone.height);
+          g.fill({ color: 0x4080cc, alpha: 0.06 });
+        }
+      } else if (key === "hotDesk") {
+        // Diagonal line pattern
+        const step = 20;
+        for (let d = -zone.height; d < zone.width + zone.height; d += step) {
+          const x1 = zone.x + d;
+          const y1 = zone.y;
+          const x2 = zone.x + d - zone.height;
+          const y2 = zone.y + zone.height;
+          g.moveTo(Math.max(zone.x, x1), y1 + Math.max(0, zone.x - x1));
+          g.lineTo(Math.max(zone.x, x2), Math.min(zone.y + zone.height, y2));
+          g.stroke({ color: ACCENT_BLUE, width: 0.3, alpha: 0.03 });
         }
       } else if (key === "meeting") {
-        // Radial pattern for meeting room
+        // Concentric rings radiating from table center
         const cx = zone.x + zone.width / 2;
         const cy = zone.y + zone.height / 2;
-        for (let r = 30; r < Math.max(zone.width, zone.height); r += 35) {
+        for (let r = 25; r < Math.max(zone.width, zone.height); r += 22) {
           g.circle(cx, cy, r);
-          g.stroke({ color: 0xffffff, width: 0.3, alpha: 0.015 });
+          g.stroke({ color: 0xffffff, width: 0.4, alpha: 0.025 });
         }
+        // Cross-hair lines through center
+        g.moveTo(zone.x, cy);
+        g.lineTo(zone.x + zone.width, cy);
+        g.stroke({ color: 0xffffff, width: 0.3, alpha: 0.02 });
+        g.moveTo(cx, zone.y);
+        g.lineTo(cx, zone.y + zone.height);
+        g.stroke({ color: 0xffffff, width: 0.3, alpha: 0.02 });
       }
 
       // Inner glow / lighter center
@@ -711,10 +763,10 @@ export class OfficeWorld {
 
     // ══ DESK ZONE ══
     const dz = ZONES.desk;
-    const deskW = 80;
-    const deskH = 32;
-    const deskPadX = 35;
-    const deskPadY = 45;
+    const deskW = 85;
+    const deskH = 34;
+    const deskPadX = 50;
+    const deskPadY = 55;
     const deskCols = 3;
     const deskRows = 3;
     const deskSpacingX = (dz.width - deskPadX * 2) / deskCols;
@@ -725,7 +777,7 @@ export class OfficeWorld {
         const dx = dz.x + deskPadX + col * deskSpacingX + deskSpacingX / 2 - deskW / 2;
         const dy = dz.y + deskPadY + row * deskSpacingY + deskSpacingY / 2 - deskH / 2;
         this.drawDesk(g, dx, dy, deskW, deskH);
-        this.drawChair(g, dx + deskW / 2, dy + deskH + 12);
+        this.drawChair(g, dx + deskW / 2, dy + deskH + 14);
         this.drawMonitor(g, dx + deskW / 2, dy + 6);
       }
     }
@@ -734,16 +786,18 @@ export class OfficeWorld {
     const hz = ZONES.hotDesk;
     const hotCols = 3;
     const hotRows = 2;
-    const hSpX = (hz.width - 60) / hotCols;
-    const hSpY = (hz.height - 60) / hotRows;
+    const hPadX = 50;
+    const hPadY = 45;
+    const hSpX = (hz.width - hPadX * 2) / hotCols;
+    const hSpY = (hz.height - hPadY * 2) / hotRows;
 
     for (let row = 0; row < hotRows; row++) {
       for (let col = 0; col < hotCols; col++) {
-        const hx = hz.x + 30 + col * hSpX + hSpX / 2 - 35;
-        const hy = hz.y + 30 + row * hSpY + hSpY / 2 - 16;
-        this.drawDesk(g, hx, hy, 70, 28);
-        this.drawChair(g, hx + 35, hy + 38);
-        this.drawMonitor(g, hx + 35, hy + 5);
+        const hx = hz.x + hPadX + col * hSpX + hSpX / 2 - 38;
+        const hy = hz.y + hPadY + row * hSpY + hSpY / 2 - 16;
+        this.drawDesk(g, hx, hy, 75, 30);
+        this.drawChair(g, hx + 37, hy + 40);
+        this.drawMonitor(g, hx + 37, hy + 5);
       }
     }
 
@@ -751,7 +805,7 @@ export class OfficeWorld {
     const mz = ZONES.meeting;
     const mcx = mz.x + mz.width / 2;
     const mcy = mz.y + mz.height / 2;
-    const tableRadius = 60;
+    const tableRadius = 70;
 
     // Table shadow
     g.ellipse(mcx + 2, mcy + 3, tableRadius, tableRadius * 0.4);
@@ -767,15 +821,15 @@ export class OfficeWorld {
     g.fill({ color: 0xffffff, alpha: 0.025 });
 
     // Center emblem (OpenClaw logo placeholder)
-    g.circle(mcx, mcy, 18);
+    g.circle(mcx, mcy, 20);
     g.fill({ color: ACCENT_PURPLE, alpha: 0.1 });
     g.stroke({ color: ACCENT_PURPLE, width: 1.5, alpha: 0.2 });
-    g.circle(mcx, mcy, 8);
+    g.circle(mcx, mcy, 10);
     g.fill({ color: ACCENT_PURPLE, alpha: 0.08 });
 
     // Meeting chairs
     const chairCount = 8;
-    const chairRadius = tableRadius + 28;
+    const chairRadius = tableRadius + 32;
     for (let i = 0; i < chairCount; i++) {
       const angle = (Math.PI * 2 * i) / chairCount - Math.PI / 2;
       const cx = mcx + Math.cos(angle) * chairRadius;
@@ -791,30 +845,30 @@ export class OfficeWorld {
     // ══ LOUNGE ══
     const lz = ZONES.lounge;
 
-    // Sofas (bigger, more prominent)
-    this.drawSofa(g, lz.x + 60, lz.y + 45, 120, 45, false);
-    this.drawSofa(g, lz.x + 260, lz.y + 45, 120, 45, false);
-    this.drawSofa(g, lz.x + 60, lz.y + 140, 120, 45, true);
-    this.drawSofa(g, lz.x + 400, lz.y + 70, 45, 90, false);
+    // Sofas (spread out for breathing room)
+    this.drawSofa(g, lz.x + 60, lz.y + 50, 130, 48, false);
+    this.drawSofa(g, lz.x + 300, lz.y + 50, 130, 48, false);
+    this.drawSofa(g, lz.x + 60, lz.y + 170, 130, 48, true);
+    this.drawSofa(g, lz.x + 480, lz.y + 80, 48, 100, false);
 
-    // Coffee tables
-    this.drawCoffeeTable(g, lz.x + 110, lz.y + 95, 50, 35);
-    this.drawCoffeeTable(g, lz.x + 300, lz.y + 95, 50, 35);
+    // Coffee tables (centered between sofas)
+    this.drawCoffeeTable(g, lz.x + 110, lz.y + 108, 55, 38);
+    this.drawCoffeeTable(g, lz.x + 340, lz.y + 108, 55, 38);
 
     // Coffee cups on tables (cozy detail)
-    g.circle(lz.x + 125, lz.y + 105, 4);
+    g.circle(lz.x + 128, lz.y + 120, 4);
     g.fill({ color: 0x8a6a4a, alpha: 0.7 });
-    g.circle(lz.x + 125, lz.y + 105, 2.5);
+    g.circle(lz.x + 128, lz.y + 120, 2.5);
     g.fill({ color: 0xba9a7a, alpha: 0.5 });
 
-    g.circle(lz.x + 315, lz.y + 108, 4);
+    g.circle(lz.x + 358, lz.y + 123, 4);
     g.fill({ color: 0x8a6a4a, alpha: 0.7 });
-    g.circle(lz.x + 315, lz.y + 108, 2.5);
+    g.circle(lz.x + 358, lz.y + 123, 2.5);
     g.fill({ color: 0xba9a7a, alpha: 0.5 });
 
     // Logo wall
     const logoCX = lz.x + lz.width / 2;
-    const logoY = lz.y + lz.height * 0.52;
+    const logoY = lz.y + lz.height * 0.55;
 
     // Logo backdrop — dark panel with accent border
     g.roundRect(logoCX - 110, logoY - 2, 220, 40, 6);
@@ -833,10 +887,10 @@ export class OfficeWorld {
     g.fill({ color: DESK_TOP_COLOR, alpha: 0.4 });
 
     // === COFFEE MACHINE ===
-    this.drawCoffeeMachine(g, lz.x + 450, lz.y + 30);
+    this.drawCoffeeMachine(g, lz.x + lz.width - 60, lz.y + 35);
 
     // === WATER COOLER ===
-    this.drawWaterCooler(g, lz.x + 450, lz.y + 100);
+    this.drawWaterCooler(g, lz.x + lz.width - 60, lz.y + 110);
 
     // Plants
     this.drawPlant(g, logoCX - 140, logoY + 20);
@@ -1382,8 +1436,8 @@ export class OfficeWorld {
     const dz = ZONES.desk;
     const deskCols = 3;
     const deskRows = 3;
-    const deskPadX = 35;
-    const deskPadY = 45;
+    const deskPadX = 50;
+    const deskPadY = 55;
     const deskSpacingX = (dz.width - deskPadX * 2) / deskCols;
     const deskSpacingY = (dz.height - deskPadY * 2) / deskRows;
 
@@ -1464,8 +1518,8 @@ export class OfficeWorld {
   private initSteamParticles(): void {
     // Coffee machine steam
     const lz = ZONES.lounge;
-    const coffeeMachineX = lz.x + 450;
-    const coffeeMachineY = lz.y + 30;
+    const coffeeMachineX = lz.x + lz.width - 60;
+    const coffeeMachineY = lz.y + 35;
     
     for (let i = 0; i < 8; i++) {
       this.steamParticles.push({
@@ -1542,9 +1596,9 @@ export class OfficeWorld {
 
     // Steam particles
     const lz = ZONES.lounge;
-    const coffeeMachineX = lz.x + 450;
-    const coffeeMachineY = lz.y + 30;
-    
+    const coffeeMachineX = lz.x + lz.width - 60;
+    const coffeeMachineY = lz.y + 35;
+
     for (const sp of this.steamParticles) {
       sp.x += sp.vx * dt + Math.sin(this.ambientPhase * 3 + sp.life * 0.1) * 0.1;
       sp.y += sp.vy * dt;
