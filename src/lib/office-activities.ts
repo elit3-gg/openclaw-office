@@ -20,6 +20,7 @@
 
 import type { VisualAgent, AgentZone } from "@/gateway/types";
 import { ZONES } from "./constants";
+import { getDialogueForActivity, shouldShowDialogue, getDialogueProbability } from "./agent-dialogue";
 
 // ── Types ──
 
@@ -788,4 +789,49 @@ export function getAgentActivityPhase(state: ActivityState, agentId: string): Ac
   if (!actId) return null;
   const act = state.activities.get(actId);
   return act?.phase ?? null;
+}
+
+/**
+ * Get current dialogue for an agent during activity.
+ * Returns null if agent is not in an interactive activity phase.
+ */
+export function getAgentDialogue(state: ActivityState, agentId: string, dt: number = 0): string | null {
+  const actId = state.agentActivity.get(agentId);
+  if (!actId) return null;
+  
+  const act = state.activities.get(actId);
+  if (!act) return null;
+  
+  // Only show dialogue during interactive phases
+  if (act.phase !== "interacting" && act.phase !== "arrived") return null;
+  
+  // Only speaking agent or solo activities get dialogue
+  const isSpeaker = act.speakingAgent === agentId;
+  const isSoloActivity = act.participants.length === 1;
+  
+  if (!isSpeaker && !isSoloActivity) return null;
+  
+  // Check if it's time for a new dialogue
+  if (shouldShowDialogue(agentId, dt)) {
+    // Use probability to decide if we should actually show dialogue
+    const prob = getDialogueProbability(act.type);
+    if (Math.random() < prob) {
+      act.currentDialogue = getDialogueForActivity(act.type, actId);
+    }
+  }
+  
+  return act.currentDialogue;
+}
+
+/**
+ * Force a new dialogue for an agent (called when speaker changes).
+ */
+export function rotateAgentDialogue(state: ActivityState, agentId: string): void {
+  const actId = state.agentActivity.get(agentId);
+  if (!actId) return;
+  
+  const act = state.activities.get(actId);
+  if (!act) return;
+  
+  act.currentDialogue = getDialogueForActivity(act.type, actId);
 }

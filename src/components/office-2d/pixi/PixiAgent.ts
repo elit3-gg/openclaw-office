@@ -18,7 +18,7 @@ import {
 } from "@/lib/idle-behaviors";
 import { getSpritePathForAgent } from "@/lib/agent-sprites";
 import { getActivityState } from "@/hooks/useCasualRoaming";
-import { getAgentFacingTarget } from "@/lib/office-activities";
+import { getAgentFacingTarget, getAgentDialogue, getAgentActivityType } from "@/lib/office-activities";
 
 // ═══════════════════════════════════════════════════════════
 // Gather.town-style agent character
@@ -101,6 +101,11 @@ export class PixiAgent {
 
   // Activity facing target position (set externally by PixiFloorPlan)
   private _facingTargetPos: { x: number; y: number } | null = null;
+
+  // Activity dialogue
+  private dialogueContainer: Container | null = null;
+  private dialogueTimer: number = 0;
+  private currentDialogue: string | null = null;
 
   constructor(agent: VisualAgent) {
     this.id = agent.id;
@@ -583,6 +588,111 @@ export class PixiAgent {
       this.statusRing.fill({ color: hex, alpha: pulseAlpha });
       this.statusRing.ellipse(0, 0, 18, 6);
       this.statusRing.stroke({ color: hex, width: 1, alpha: 0.3 });
+    }
+
+    // Activity dialogue update (only when idle - not in actual AI conversation)
+    if (this.lastStatus === "idle") {
+      this.updateActivityDialogue(dt);
+    } else {
+      this.clearActivityDialogue();
+    }
+  }
+
+  private updateActivityDialogue(dt: number): void {
+    const actState = getActivityState();
+    if (!actState) {
+      this.clearActivityDialogue();
+      return;
+    }
+
+    const actType = getAgentActivityType(actState, this.id);
+    if (!actType) {
+      this.clearActivityDialogue();
+      return;
+    }
+
+    // Get dialogue from the activity system
+    const dialogue = getAgentDialogue(actState, this.id, dt * 0.016);
+    
+    if (dialogue && dialogue !== this.currentDialogue) {
+      this.currentDialogue = dialogue;
+      this.showActivityDialogue(dialogue);
+      this.dialogueTimer = 4 + Math.random() * 2; // Show for 4-6 seconds
+    }
+
+    // Fade out dialogue after timer
+    if (this.dialogueContainer) {
+      this.dialogueTimer -= dt * 0.016;
+      if (this.dialogueTimer <= 0) {
+        this.clearActivityDialogue();
+      } else if (this.dialogueTimer < 0.5) {
+        // Fade out
+        this.dialogueContainer.alpha = this.dialogueTimer * 2;
+      }
+    }
+  }
+
+  private showActivityDialogue(text: string): void {
+    this.clearActivityDialogue();
+
+    this.dialogueContainer = new Container();
+    this.dialogueContainer.zIndex = 11;
+    this.dialogueContainer.y = -DISPLAY_SIZE - 35;
+
+    const maxWidth = 140;
+    const padding = 6;
+
+    // Create text first to measure
+    const label = new Text({
+      text: text.length > 35 ? text.slice(0, 33) + "…" : text,
+      style: new TextStyle({
+        fontSize: 8,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fill: 0xe0e0e0,
+        wordWrap: true,
+        wordWrapWidth: maxWidth - padding * 2,
+      }),
+    });
+
+    const bubbleW = Math.min(label.width + padding * 2, maxWidth);
+    const bubbleH = label.height + padding * 2;
+
+    // Background bubble
+    const bg = new Graphics();
+    // Shadow
+    bg.roundRect(-bubbleW / 2 + 1, -bubbleH + 1, bubbleW, bubbleH, 6);
+    bg.fill({ color: 0x000000, alpha: 0.15 });
+    // Bubble body
+    bg.roundRect(-bubbleW / 2, -bubbleH, bubbleW, bubbleH, 6);
+    bg.fill({ color: 0x1a1a2e, alpha: 0.92 });
+    bg.stroke({ color: 0x7c6ff5, width: 1, alpha: 0.5 });
+    // Pointer
+    bg.moveTo(-4, 0);
+    bg.lineTo(0, 6);
+    bg.lineTo(4, 0);
+    bg.fill({ color: 0x1a1a2e, alpha: 0.92 });
+
+    this.dialogueContainer.addChild(bg);
+
+    label.anchor.set(0.5, 0);
+    label.y = -bubbleH + padding;
+    this.dialogueContainer.addChild(label);
+
+    // Fade in
+    this.dialogueContainer.alpha = 0;
+    
+    this.container.addChild(this.dialogueContainer);
+    
+    // Quick fade in
+    this.dialogueContainer.alpha = 1;
+  }
+
+  private clearActivityDialogue(): void {
+    if (this.dialogueContainer) {
+      this.container.removeChild(this.dialogueContainer);
+      this.dialogueContainer.destroy({ children: true });
+      this.dialogueContainer = null;
+      this.currentDialogue = null;
     }
   }
 

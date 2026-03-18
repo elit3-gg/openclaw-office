@@ -9,7 +9,7 @@ import type { VisualAgent } from "@/gateway/types";
 import { position2dTo3d } from "@/lib/position-allocator";
 import { useOfficeStore } from "@/store/office-store";
 import { getActivityState, getLastTickResult } from "@/hooks/useCasualRoaming";
-import { getAgentFacingTarget, getAgentActivityType } from "@/lib/office-activities";
+import { getAgentFacingTarget, getAgentActivityType, getAgentDialogue } from "@/lib/office-activities";
 import { ErrorIndicator } from "./ErrorIndicator";
 import { SkillHologram } from "./SkillHologram";
 import { SpriteCharacter } from "./SpriteCharacter";
@@ -256,6 +256,62 @@ function SpeechBubbleOverlay({ text }: { text: string }) {
   );
 }
 
+/** Activity dialogue bubble — shows contextual messages during activities */
+function ActivityDialogueBubble({ agentId }: { agentId: string }) {
+  const actState = getActivityState();
+  if (!actState) return null;
+
+  const dialogue = getAgentDialogue(actState, agentId, 0.1);
+  if (!dialogue) return null;
+
+  return (
+    <Html position={[0, CHAR_TOP + 0.3, 0]} center transform={false} style={{ pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "relative",
+          maxWidth: "160px",
+          padding: "5px 10px",
+          borderRadius: "8px",
+          background: "rgba(26, 26, 46, 0.92)",
+          border: "1px solid rgba(124, 111, 245, 0.5)",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+          animation: "fadeIn 0.3s ease-out",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: "9px",
+            lineHeight: "13px",
+            color: "#e0e0e0",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "block",
+            maxWidth: "140px",
+          }}
+        >
+          {dialogue}
+        </span>
+        {/* Small pointer triangle */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "-5px",
+            left: "50%",
+            transform: "translateX(-50%) rotate(45deg)",
+            width: "8px",
+            height: "8px",
+            background: "rgba(26, 26, 46, 0.92)",
+            borderRight: "1px solid rgba(124, 111, 245, 0.5)",
+            borderBottom: "1px solid rgba(124, 111, 245, 0.5)",
+          }}
+        />
+      </div>
+    </Html>
+  );
+}
+
 /** Shows a small chat/activity indicator when agents interact */
 function InteractionBubble({ agentId }: { agentId: string }) {
   const actState = getActivityState();
@@ -268,15 +324,39 @@ function InteractionBubble({ agentId }: { agentId: string }) {
   const isSpeaking = tickResult.speakingAgents.has(agentId);
   const isSitting = tickResult.sittingAgents.has(agentId);
   const isDrinking = tickResult.drinkingAgents.has(agentId);
+  const isOnPhone = tickResult.phoneAgents?.has(agentId);
+  const isWhiteboarding = tickResult.whiteboardingAgents?.has(agentId);
+  const isStretching = tickResult.stretchingAgents?.has(agentId);
+  const isPresenting = tickResult.presentingAgents?.has(agentId);
+  const isReviewing = tickResult.reviewingAgents?.has(agentId);
 
   let icon = "";
+  let bgColor = "rgba(59, 130, 246, 0.8)";
 
-  if (isSpeaking) {
+  if (isPresenting) {
+    icon = "📊";
+    bgColor = "rgba(168, 85, 247, 0.9)";
+  } else if (isOnPhone) {
+    icon = "📱";
+    bgColor = "rgba(34, 197, 94, 0.9)";
+  } else if (isWhiteboarding) {
+    icon = "📝";
+    bgColor = "rgba(249, 115, 22, 0.9)";
+  } else if (isStretching) {
+    icon = "🧘";
+    bgColor = "rgba(59, 130, 246, 0.8)";
+  } else if (isReviewing) {
+    icon = "👀";
+    bgColor = "rgba(139, 92, 246, 0.9)";
+  } else if (isSpeaking) {
     icon = "💬";
+    bgColor = "rgba(168, 85, 247, 0.9)";
   } else if (isDrinking) {
     icon = "☕";
+    bgColor = "rgba(217, 119, 6, 0.9)";
   } else if (isSitting) {
     icon = "🛋️";
+    bgColor = "rgba(99, 102, 241, 0.9)";
   } else if (actType === "meeting") {
     icon = "📋";
   } else if (actType === "waterCooler") {
@@ -295,7 +375,7 @@ function InteractionBubble({ agentId }: { agentId: string }) {
           width: "22px",
           height: "22px",
           borderRadius: "50%",
-          background: isSpeaking ? "rgba(168, 85, 247, 0.9)" : isDrinking ? "rgba(217, 119, 6, 0.9)" : isSitting ? "rgba(99, 102, 241, 0.9)" : "rgba(59, 130, 246, 0.8)",
+          background: bgColor,
           fontSize: "12px",
           boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
           animation: isSpeaking ? "pulse 1.5s ease-in-out infinite" : undefined,
@@ -538,6 +618,9 @@ export function AgentCharacter({ agent }: AgentCharacterProps) {
 
       {/* Interaction chat bubble — agent is "speaking" during a meeting/chat activity */}
       {agent.status === "idle" && <InteractionBubble agentId={agent.id} />}
+
+      {/* Activity dialogue bubble — contextual messages during activities */}
+      {agent.status === "idle" && <ActivityDialogueBubble agentId={agent.id} />}
 
       {/* Selection ring — bright pulsing ring on ground */}
       {isSelected && (
