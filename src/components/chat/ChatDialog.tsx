@@ -267,98 +267,102 @@ export function ChatDialog() {
         </button>
       </div>
 
-      {/* ═══ "All" tab - Office Feed ═══ */}
-      {activeTab === "all" && (
+      {/* ═══ Content area ═══ */}
+      {activeTab === "all" ? (
+        /* "All" tab — Office Feed */
         <div className="min-h-0 flex-1 overflow-hidden">
           <OfficeFeed />
         </div>
-      )}
-
-      {/* ═══ "Chat" tab - normal chat ═══ */}
-      {activeTab === "chat" && targetAgent?.isSubAgent && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-purple-100 bg-purple-50 px-3 py-1.5 text-xs dark:border-purple-900/30 dark:bg-purple-900/10">
-          <span className="rounded bg-purple-100 px-1 py-0.5 text-[9px] font-medium text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
-            sub-agent
-          </span>
-          <span className="font-medium text-purple-700 dark:text-purple-300">{targetAgent.name}</span>
-          {parentAgent && (
-            <span className="text-purple-500 dark:text-purple-400">
-              ↳ reporting to <span className="font-medium">{parentAgent.name}</span>
-            </span>
+      ) : (
+        /* "Chat" tab — normal chat */
+        <>
+          {/* Sub-agent context banner */}
+          {targetAgent?.isSubAgent && (
+            <div className="flex shrink-0 items-center gap-2 border-b border-purple-100 bg-purple-50 px-3 py-1.5 text-xs dark:border-purple-900/30 dark:bg-purple-900/10">
+              <span className="rounded bg-purple-100 px-1 py-0.5 text-[9px] font-medium text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
+                sub-agent
+              </span>
+              <span className="font-medium text-purple-700 dark:text-purple-300">{targetAgent.name}</span>
+              {parentAgent && (
+                <span className="text-purple-500 dark:text-purple-400">
+                  ↳ reporting to <span className="font-medium">{parentAgent.name}</span>
+                </span>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {/* Loading state */}
-      {activeTab === "chat" && isHistoryLoading && (
-        <div className="flex shrink-0 items-center justify-center gap-2 py-3 text-sm text-gray-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{t("chatDialog.loadingHistory")}</span>
-        </div>
-      )}
+          {/* Loading state */}
+          {isHistoryLoading && (
+            <div className="flex shrink-0 items-center justify-center gap-2 py-3 text-sm text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{t("chatDialog.loadingHistory")}</span>
+            </div>
+          )}
 
-      {/* Messages area - flex-1 fills remaining space */}
-      {activeTab === "chat" && <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="relative min-h-0 flex-1 overflow-y-auto px-4 py-2"
-      >
-        {allMessages.length === 0 && !isStreaming && !isHistoryLoading ? (
-          <div className="flex h-full items-center justify-center text-sm text-gray-400">
-            {t("dock.startNewChat")}
+          {/* Messages area */}
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="relative min-h-0 flex-1 overflow-y-auto px-4 py-2"
+          >
+            {allMessages.length === 0 && !isStreaming && !isHistoryLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                {t("dock.startNewChat")}
+              </div>
+            ) : (
+              <>
+                {allMessages.map((msg) => (
+                  <MessageBubble key={msg.id} message={msg} />
+                ))}
+                {isStreaming && streamingText && (
+                  <div className="mb-3 flex justify-start">
+                    <div className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+                      <MarkdownContent content={streamingText} />
+                      <StreamingIndicator />
+                    </div>
+                  </div>
+                )}
+                {isStreaming && !streamingText && (
+                  <div className="mb-3 flex justify-start">
+                    <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-400 dark:bg-gray-800">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                      <span>{t("dock.thinkingStatus")}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Scroll to bottom button */}
+            {!autoScroll && (
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                title={t("chatDialog.scrollToBottom")}
+                className="sticky bottom-2 left-full z-10 -mr-2 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white shadow-md hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
+              >
+                <ArrowDown className="h-4 w-4 text-gray-500" />
+              </button>
+            )}
           </div>
-        ) : (
-          <>
-            {allMessages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
-            {isStreaming && streamingText && (
-              <div className="mb-3 flex justify-start">
-                <div className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100">
-                  <MarkdownContent content={streamingText} />
-                  <StreamingIndicator />
-                </div>
-              </div>
-            )}
-            {isStreaming && !streamingText && (
-              <div className="mb-3 flex justify-start">
-                <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-400 dark:bg-gray-800">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                  <span>{t("dock.thinkingStatus")}</span>
-                </div>
-              </div>
-            )}
-          </>
-        )}
 
-        {/* Scroll to bottom button */}
-        {!autoScroll && (
-          <button
-            type="button"
-            onClick={scrollToBottom}
-            title={t("chatDialog.scrollToBottom")}
-            className="sticky bottom-2 left-full z-10 -mr-2 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white shadow-md hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            <ArrowDown className="h-4 w-4 text-gray-500" />
-          </button>
-        )}
-      </div>}
-
-      {/* Error banner */}
-      {activeTab === "chat" && error && (
-        <div className="flex shrink-0 items-center justify-between bg-red-50 px-3 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          <span className="truncate">{error}</span>
-          <button
-            type="button"
-            onClick={clearError}
-            className="ml-2 text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
+          {/* Error banner */}
+          {error && (
+            <div className="flex shrink-0 items-center justify-between bg-red-50 px-3 py-1.5 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              <span className="truncate">{error}</span>
+              <button
+                type="button"
+                onClick={clearError}
+                className="ml-2 text-red-500 hover:text-red-700"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Input area — pinned to bottom (both tabs) */}
+      {/* Input area — pinned to bottom */}
       <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900" onClick={() => { if (activeTab === "all") setActiveTab("chat"); }}>
         <div className="flex items-end gap-2">
           <AgentSelector />
